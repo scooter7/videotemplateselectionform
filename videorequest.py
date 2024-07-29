@@ -52,7 +52,7 @@ with st.form(key='campaign_form'):
     st.video("https://youtu.be/QlbZ-FQYJlk", format="video/mp4", start_time=0)
     
     template2 = st.checkbox("Template 2", key='template2')
-    st.video("https://youtu.be/e2Dey2DS784, format="video/mp4", start_time=0)
+    st.video("https://youtu.be/e2Dey2DS784", format="video/mp4", start_time=0)
     
     template3 = st.checkbox("Template 3", key='template3')
     st.video("https://youtu.be/A3ycwztkUHM", format="video/mp4", start_time=0)
