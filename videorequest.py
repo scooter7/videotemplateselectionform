@@ -2,22 +2,40 @@ import streamlit as st
 import boto3
 import pandas as pd
 from io import StringIO
+import os
 
-# Load AWS credentials from Streamlit secrets
+# Load secrets
 aws_access_key_id = st.secrets["AWS"]["aws_access_key_id"]
 aws_secret_access_key = st.secrets["AWS"]["aws_secret_access_key"]
 bucket_name = st.secrets["AWS"]["bucket_name"]
 object_key = st.secrets["AWS"]["object_key"]
 
-# Function to upload data to S3
-def upload_to_s3(dataframe, bucket, key):
+# Function to read CSV from S3
+def read_csv_from_s3(bucket, key, access_key, secret_key):
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key
+    )
+    try:
+        csv_obj = s3_client.get_object(Bucket=bucket, Key=key)
+        body = csv_obj['Body']
+        csv_string = body.read().decode('utf-8')
+        return pd.read_csv(StringIO(csv_string))
+    except s3_client.exceptions.NoSuchKey:
+        return pd.DataFrame(columns=["first_name", "last_name", "email", "description", "template"])
+
+# Function to upload CSV to S3
+def upload_to_s3(dataframe, bucket, key, access_key, secret_key):
     csv_buffer = StringIO()
     dataframe.to_csv(csv_buffer, index=False)
+    
     s3_resource = boto3.resource(
         's3',
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key
     )
+    
     s3_resource.Object(bucket, key).put(Body=csv_buffer.getvalue())
 
 # Streamlit app
@@ -33,35 +51,23 @@ with st.form(key='campaign_form'):
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
-    # Create a DataFrame from the form inputs
-    data = {
-        'first_name': [first_name],
-        'last_name': [last_name],
-        'email': [email],
-        'description': [description],
-        'template': [template]
+    # Read existing data from S3
+    existing_df = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+    
+    # Create a DataFrame for the new data
+    new_data = {
+        "first_name": [first_name],
+        "last_name": [last_name],
+        "email": [email],
+        "description": [description],
+        "template": [template]
     }
-    df = pd.DataFrame(data)
+    new_df = pd.DataFrame(new_data)
     
-    # Check if the CSV file already exists in S3
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key
-    )
+    # Append new data to existing data
+    updated_df = pd.concat([existing_df, new_df], ignore_index=True)
     
-    try:
-        s3_client.head_object(Bucket=bucket_name, Key=object_key)
-        # File exists, so read it and append new data
-        obj = s3_client.get_object(Bucket=bucket_name, Key=object_key)
-        existing_df = pd.read_csv(obj['Body'])
-        df = pd.concat([existing_df, df], ignore_index=True)
-    except s3_client.exceptions.NoSuchKey:
-        # File does not exist, so create a new one
-        pass
+    # Upload the updated data back to S3
+    upload_to_s3(updated_df, bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
     
-    # Upload the updated DataFrame to S3
-    upload_to_s3(df, bucket_name, object_key)
-    
-    st.success("Form submitted successfully and data saved to S3!")
-
+    st.success("Data submitted and uploaded to S3 successfully!")
