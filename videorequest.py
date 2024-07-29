@@ -1,41 +1,24 @@
 import streamlit as st
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import boto3
+import pandas as pd
+from io import StringIO
 
-# Function to send email
-def send_email(first_name, last_name, email, description, template):
-    sender_email = "james.vineburgh@magellaneducation.co"
-    receiver_email = "scooter.vineburgh@gmail.com"
-    password = "VictoriaJames7!"
+# Load AWS credentials from Streamlit secrets
+aws_access_key_id = st.secrets["AWS"]["aws_access_key_id"]
+aws_secret_access_key = st.secrets["AWS"]["aws_secret_access_key"]
+bucket_name = st.secrets["AWS"]["bucket_name"]
+object_key = st.secrets["AWS"]["object_key"]
 
-    # Create the email content
-    message = MIMEMultipart("alternative")
-    message["Subject"] = "New Campaign Submission"
-    message["From"] = sender_email
-    message["To"] = receiver_email
-
-    text = f"""
-    New Campaign Submission:
-
-    First Name: {first_name}
-    Last Name: {last_name}
-    Corporate Email Address: {email}
-    Description of Campaign: {description}
-    Selected Video Template: {template}
-    """
-
-    part = MIMEText(text, "plain")
-    message.attach(part)
-
-    # Connect to the server and send the email
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender_email, password)
-            server.sendmail(sender_email, receiver_email, message.as_string())
-        return "Email sent successfully!"
-    except Exception as e:
-        return f"Error sending email: {e}"
+# Function to upload data to S3
+def upload_to_s3(dataframe, bucket, key):
+    csv_buffer = StringIO()
+    dataframe.to_csv(csv_buffer, index=False)
+    s3_resource = boto3.resource(
+        's3',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key
+    )
+    s3_resource.Object(bucket, key).put(Body=csv_buffer.getvalue())
 
 # Streamlit app
 st.title("Campaign Submission Form")
@@ -50,5 +33,35 @@ with st.form(key='campaign_form'):
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
-    result = send_email(first_name, last_name, email, description, template)
-    st.write(result)
+    # Create a DataFrame from the form inputs
+    data = {
+        'first_name': [first_name],
+        'last_name': [last_name],
+        'email': [email],
+        'description': [description],
+        'template': [template]
+    }
+    df = pd.DataFrame(data)
+    
+    # Check if the CSV file already exists in S3
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key
+    )
+    
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=object_key)
+        # File exists, so read it and append new data
+        obj = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        existing_df = pd.read_csv(obj['Body'])
+        df = pd.concat([existing_df, df], ignore_index=True)
+    except s3_client.exceptions.NoSuchKey:
+        # File does not exist, so create a new one
+        pass
+    
+    # Upload the updated DataFrame to S3
+    upload_to_s3(df, bucket_name, object_key)
+    
+    st.success("Form submitted successfully and data saved to S3!")
+
