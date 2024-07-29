@@ -38,8 +38,9 @@ def upload_to_s3(dataframe, bucket, key, access_key, secret_key):
     s3_resource.Object(bucket, key).put(Body=csv_buffer.getvalue())
 
 # Authentication
+admin_users = ["scooter.vineburgh@gmail.com", "jbergren@jordanbruce.tv"]
 def check_login(username, password):
-    return username == "scooter.vineburgh@gmail.com" and password == "Simplate1!"
+    return username in admin_users and password == "Simplate1!"
 
 # Streamlit app with navigation
 st.sidebar.title("Navigation")
