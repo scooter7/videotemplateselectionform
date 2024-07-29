@@ -2,7 +2,6 @@ import streamlit as st
 import boto3
 import pandas as pd
 from io import StringIO
-import os
 
 # Load secrets
 aws_access_key_id = st.secrets["AWS"]["aws_access_key_id"]
@@ -46,28 +45,54 @@ with st.form(key='campaign_form'):
     last_name = st.text_input("Last Name")
     email = st.text_input("Corporate Email Address")
     description = st.text_area("Description of Campaign")
-    template = st.selectbox("Select Video Template", ["Template 1", "Template 2", "Template 3", "Template 4"])
 
+    st.write("### Select a Video Template:")
+    
+    template1 = st.checkbox("Template 1", key='template1')
+    st.video("https://youtu.be/QlbZ-FQYJlk", format="video/mp4", start_time=0)
+    
+    template2 = st.checkbox("Template 2", key='template2')
+    st.video("https://youtu.be/e2Dey2DS784, format="video/mp4", start_time=0)
+    
+    template3 = st.checkbox("Template 3", key='template3')
+    st.video("https://youtu.be/A3ycwztkUHM", format="video/mp4", start_time=0)
+    
+    template4 = st.checkbox("Template 4", key='template4')
+    st.video("https://youtu.be/61B7-zPYlTU", format="video/mp4", start_time=0)
+    
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
-    # Read existing data from S3
-    existing_df = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+    selected_template = None
+    if template1:
+        selected_template = "Template 1"
+    elif template2:
+        selected_template = "Template 2"
+    elif template3:
+        selected_template = "Template 3"
+    elif template4:
+        selected_template = "Template 4"
     
-    # Create a DataFrame for the new data
-    new_data = {
-        "first_name": [first_name],
-        "last_name": [last_name],
-        "email": [email],
-        "description": [description],
-        "template": [template]
-    }
-    new_df = pd.DataFrame(new_data)
-    
-    # Append new data to existing data
-    updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-    
-    # Upload the updated data back to S3
-    upload_to_s3(updated_df, bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
-    
-    st.success("Data submitted and uploaded to S3 successfully!")
+    if selected_template is None:
+        st.error("Please select one video template.")
+    else:
+        # Read existing data from S3
+        existing_df = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+        
+        # Create a DataFrame for the new data
+        new_data = {
+            "first_name": [first_name],
+            "last_name": [last_name],
+            "email": [email],
+            "description": [description],
+            "template": [selected_template]
+        }
+        new_df = pd.DataFrame(new_data)
+        
+        # Append new data to existing data
+        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+        
+        # Upload the updated data back to S3
+        upload_to_s3(updated_df, bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+        
+        st.success("Data submitted and uploaded to S3 successfully!")
