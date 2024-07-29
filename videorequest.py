@@ -47,50 +47,32 @@ with st.form(key='campaign_form'):
     description = st.text_area("Description of Campaign")
 
     st.write("### Select a Video Template:")
-
-    templates = {
-        "Template 1": "https://youtu.be/QlbZ-FQYJlk",
-        "Template 2": "https://youtu.be/e2Dey2DS784",
-        "Template 3": "https://youtu.be/A3ycwztkUHM",
-        "Template 4": "https://youtu.be/61B7-zPYlTU"
-    }
-
-    selected_template = st.radio(
-        label="Choose one of the following templates:",
-        options=["Template 1", "Template 2", "Template 3", "Template 4"],
-    )
-
+    
+    # Display videos in columns
     col1, col2 = st.columns(2)
     with col1:
-        st.video(templates["Template 1"], format="video/mp4", start_time=0)
-        st.radio("", options=["Template 1"], key='template1', index=0 if selected_template == "Template 1" else -1)
-
+        st.video("https://youtu.be/QlbZ-FQYJlk", format="video/mp4", start_time=0)
+        st.write("Template 1")
     with col2:
-        st.video(templates["Template 2"], format="video/mp4", start_time=0)
-        st.radio("", options=["Template 2"], key='template2', index=0 if selected_template == "Template 2" else -1)
-
+        st.video("https://youtu.be/e2Dey2DS784", format="video/mp4", start_time=0)
+        st.write("Template 2")
+        
     col3, col4 = st.columns(2)
     with col3:
-        st.video(templates["Template 3"], format="video/mp4", start_time=0)
-        st.radio("", options=["Template 3"], key='template3', index=0 if selected_template == "Template 3" else -1)
-
+        st.video("https://youtu.be/A3ycwztkUHM", format="video/mp4", start_time=0)
+        st.write("Template 3")
     with col4:
-        st.video(templates["Template 4"], format="video/mp4", start_time=0)
-        st.radio("", options=["Template 4"], key='template4', index=0 if selected_template == "Template 4" else -1)
+        st.video("https://youtu.be/61B7-zPYlTU", format="video/mp4", start_time=0)
+        st.write("Template 4")
+    
+    selected_template = st.radio(
+        label="Choose one of the following templates:",
+        options=["Template 1", "Template 2", "Template 3", "Template 4"]
+    )
 
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
-    # Determine which template was selected
-    if st.session_state.template1:
-        selected_template = "Template 1"
-    elif st.session_state.template2:
-        selected_template = "Template 2"
-    elif st.session_state.template3:
-        selected_template = "Template 3"
-    elif st.session_state.template4:
-        selected_template = "Template 4"
-
     # Read existing data from S3
     existing_df = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
     
