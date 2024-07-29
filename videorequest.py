@@ -47,21 +47,23 @@ with st.form(key='campaign_form'):
     description = st.text_area("Description of Campaign")
 
     st.write("### Select a Video Template:")
-
-    templates = {
-        "Template 1": "https://youtu.be/QlbZ-FQYJlk",
-        "Template 2": "https://youtu.be/e2Dey2DS784",
-        "Template 3": "https://youtu.be/A3ycwztkUHM",
-        "Template 4": "https://youtu.be/61B7-zPYlTU"
-    }
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.video("https://youtu.be/QlbZ-FQYJlk", format="video/mp4", start_time=0)
+    with col2:
+        st.video("https://youtu.be/e2Dey2DS784", format="video/mp4", start_time=0)
+        
+    col3, col4 = st.columns(2)
+    with col3:
+        st.video("https://youtu.be/A3ycwztkUHM", format="video/mp4", start_time=0)
+    with col4:
+        st.video("https://youtu.be/61B7-zPYlTU", format="video/mp4", start_time=0)
 
     selected_template = st.radio(
         label="Choose one of the following templates:",
-        options=list(templates.keys()),
-        format_func=lambda x: x,
+        options=["Template 1", "Template 2", "Template 3", "Template 4"],
     )
-
-    st.video(templates[selected_template], format="video/mp4", start_time=0)
 
     submit_button = st.form_submit_button(label='Submit')
 
