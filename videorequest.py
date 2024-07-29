@@ -37,59 +37,82 @@ def upload_to_s3(dataframe, bucket, key, access_key, secret_key):
     
     s3_resource.Object(bucket, key).put(Body=csv_buffer.getvalue())
 
-# Streamlit app
-st.title("Campaign Submission Form")
+# Authentication
+def check_login(username, password):
+    return username == "scooter.vineburgh@gmail.com" and password == "Simplate1!"
 
-with st.form(key='campaign_form'):
-    first_name = st.text_input("First Name")
-    last_name = st.text_input("Last Name")
-    email = st.text_input("Corporate Email Address")
-    description = st.text_area("Description of Campaign")
+# Streamlit app with navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", ["Submission", "Admin"])
 
-    st.write("### Select a Video Template:")
-    
-    # Display videos in columns
-    col1, col2 = st.columns(2)
-    with col1:
-        st.video("https://youtu.be/QlbZ-FQYJlk", format="video/mp4", start_time=0)
-        st.write("Template 1")
-    with col2:
-        st.video("https://youtu.be/e2Dey2DS784", format="video/mp4", start_time=0)
-        st.write("Template 2")
+if page == "Submission":
+    st.title("Campaign Submission Form")
+    with st.form(key='campaign_form'):
+        first_name = st.text_input("First Name")
+        last_name = st.text_input("Last Name")
+        email = st.text_input("Corporate Email Address")
+        description = st.text_area("Description of Campaign")
+
+        st.write("### Select a Video Template:")
         
-    col3, col4 = st.columns(2)
-    with col3:
-        st.video("https://youtu.be/A3ycwztkUHM", format="video/mp4", start_time=0)
-        st.write("Template 3")
-    with col4:
-        st.video("https://youtu.be/61B7-zPYlTU", format="video/mp4", start_time=0)
-        st.write("Template 4")
-    
-    selected_template = st.radio(
-        label="Choose one of the following templates:",
-        options=["Template 1", "Template 2", "Template 3", "Template 4"]
-    )
+        # Display videos in columns
+        col1, col2 = st.columns(2)
+        with col1:
+            st.video("https://youtu.be/QlbZ-FQYJlk", format="video/mp4", start_time=0)
+            st.write("Template 1")
+        with col2:
+            st.video("https://youtu.be/e2Dey2DS784", format="video/mp4", start_time=0)
+            st.write("Template 2")
+            
+        col3, col4 = st.columns(2)
+        with col3:
+            st.video("https://youtu.be/A3ycwztkUHM", format="video/mp4", start_time=0)
+            st.write("Template 3")
+        with col4:
+            st.video("https://youtu.be/61B7-zPYlTU", format="video/mp4", start_time=0)
+            st.write("Template 4")
+        
+        selected_template = st.radio(
+            label="Choose one of the following templates:",
+            options=["Template 1", "Template 2", "Template 3", "Template 4"]
+        )
 
-    submit_button = st.form_submit_button(label='Submit')
+        submit_button = st.form_submit_button(label='Submit')
 
-if submit_button:
-    # Read existing data from S3
-    existing_df = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
-    
-    # Create a DataFrame for the new data
-    new_data = {
-        "first_name": [first_name],
-        "last_name": [last_name],
-        "email": [email],
-        "description": [description],
-        "template": [selected_template]
-    }
-    new_df = pd.DataFrame(new_data)
-    
-    # Append new data to existing data
-    updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-    
-    # Upload the updated data back to S3
-    upload_to_s3(updated_df, bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
-    
-    st.success("Data submitted and uploaded to S3 successfully!")
+    if submit_button:
+        # Read existing data from S3
+        existing_df = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+        
+        # Create a DataFrame for the new data
+        new_data = {
+            "first_name": [first_name],
+            "last_name": [last_name],
+            "email": [email],
+            "description": [description],
+            "template": [selected_template]
+        }
+        new_df = pd.DataFrame(new_data)
+        
+        # Append new data to existing data
+        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+        
+        # Upload the updated data back to S3
+        upload_to_s3(updated_df, bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+        
+        st.success("Data submitted and uploaded to S3 successfully!")
+
+elif page == "Admin":
+    st.title("Admin Login")
+    admin_email = st.text_input("Email")
+    admin_password = st.text_input("Password", type="password")
+    login_button = st.button("Login")
+
+    if login_button:
+        if check_login(admin_email, admin_password):
+            st.success("Login successful!")
+            st.title("Admin Dashboard")
+            st.write("Current Submissions:")
+            data = read_csv_from_s3(bucket_name, object_key, aws_access_key_id, aws_secret_access_key)
+            st.dataframe(data)
+        else:
+            st.error("Invalid email or password. Please try again.")
