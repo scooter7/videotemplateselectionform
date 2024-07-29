@@ -5,9 +5,9 @@ from email.mime.multipart import MIMEMultipart
 
 # Function to send email
 def send_email(first_name, last_name, email, description, template):
-    sender_email = "cyberpracticesolutions@gmail.com"
+    sender_email = "james.vineburgh@magellaneducation.co"
     receiver_email = "scooter.vineburgh@gmail.com"
-    password = "victoriajames7"
+    password = "VictoriaJames7!"
 
     # Create the email content
     message = MIMEMultipart("alternative")
