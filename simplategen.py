@@ -78,7 +78,7 @@ def remove_emojis(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Function to generate content using OpenAI
+# Function to generate content using OpenAI's gpt-4o-mini
 def generate_content(description, template):
     template_map = {
         1: {"prompt": "200 characters broken into two paragraphs.", "limit": 200, "paragraphs": 2},
@@ -98,8 +98,8 @@ def generate_content(description, template):
         f"Maximum Character Count: {selected_template['limit']}"
     )
 
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
@@ -109,7 +109,7 @@ def generate_content(description, template):
     content = response.choices[0].message["content"].strip()
     content_no_emojis = remove_emojis(content)
 
-    # Ensure the content adheres to the character limit and is complete
+    # Ensure the content adheres to the character limit and ends with complete sentences
     def truncate_to_limit(text, limit):
         if len(text) <= limit:
             return text
@@ -120,22 +120,19 @@ def generate_content(description, template):
         return truncated_text
 
     def enforce_paragraph_limits(text, paragraphs, char_limit):
-        sentences = text.split('. ')
+        sentences = re.split(r'(?<=\.) ', text)
         result_paragraphs = []
         current_paragraph = ""
 
         for sentence in sentences:
-            if len(current_paragraph) + len(sentence) + 2 <= char_limit:
-                current_paragraph += sentence + '. '
+            if len(current_paragraph) + len(sentence) <= char_limit:
+                current_paragraph += sentence + ' '
             else:
                 if current_paragraph:
                     result_paragraphs.append(current_paragraph.strip())
-                    current_paragraph = ""
-                if len(sentence) + 2 > char_limit:
-                    parts = [sentence[i:i + char_limit] for i in range(0, len(sentence), char_limit)]
-                    result_paragraphs.extend(parts)
+                    current_paragraph = sentence + ' '
                 else:
-                    current_paragraph = sentence + '. '
+                    result_paragraphs.append(sentence.strip())
                 if len(result_paragraphs) == paragraphs:
                     break
 
@@ -213,7 +210,7 @@ def main():
             {"role": "user", "content": pasted_content},
             {"role": "user", "content": revision_requests}
         ]
-        response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=revision_messages)
+        response = openai.ChatCompletion.create(model="gpt-4o-mini", messages=revision_messages)
         revised_content = response.choices[0].message["content"].strip()
         revised_content_no_emojis = remove_emojis(revised_content)
         st.text(revised_content_no_emojis)
