@@ -104,7 +104,7 @@ def main():
         # Generate content for each row in the CSV
         generated_pages = []
         for _, row in csv_data.iterrows():
-            if row.get("Completed", "").strip().lower() == "yes":
+            if str(row.get("Completed", "")).strip().lower() == "yes":
                 continue
             
             first_name = row["first_name"]
