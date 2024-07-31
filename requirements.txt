@@ -1,5 +1,5 @@
 streamlit
 pandas
 boto3
-openai==0.28
+openai
 requests
