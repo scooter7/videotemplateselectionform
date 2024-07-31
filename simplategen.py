@@ -53,7 +53,7 @@ st.markdown(
 st.markdown(
     """
     <div class="logo-container">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/East_Carolina_University.svg/1280px-East_Carolina_University.svg.png" alt="Logo">
+        <img src="https://mir-s3-cdn-cf.behance.net/project_modules/1400/da17b078065083.5cadb8dec2e85.png" alt="Logo">
     </div>
     """,
     unsafe_allow_html=True
@@ -153,7 +153,7 @@ def generate_content(description, template):
     return content_no_emojis
 
 def main():
-    st.title("AI Content Generator")
+    st.title("AI Script Generator")
     st.markdown("---")
 
     # Initialize the session state for generated pages
