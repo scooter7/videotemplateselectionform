@@ -214,7 +214,7 @@ def main():
             model="gpt-4o-mini",
             messages=revision_messages
         )
-        revised_content = response.choices[0].message["content"].strip()
+        revised_content = completion.choices[0].message["content"].strip()
         revised_content_no_emojis = remove_emojis(revised_content)
         st.text(revised_content_no_emojis)
         st.download_button("Download Revised Content", revised_content_no_emojis, "revised_content_revision.txt", key="download_revised_content")
