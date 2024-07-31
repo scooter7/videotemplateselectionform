@@ -108,15 +108,24 @@ def generate_content(description, template):
     content_no_emojis = remove_emojis(content)
     
     # Ensure the content adheres to the character limit and is complete
-    if len(content_no_emojis) > selected_template['limit']:
-        truncated_content = content_no_emojis[:selected_template['limit']]
-        last_sentence_end = truncated_content.rfind('.')
-        content_no_emojis = truncated_content[:last_sentence_end+1] if last_sentence_end != -1 else truncated_content
+    def truncate_to_limit(text, limit):
+        if len(text) <= limit:
+            return text
+        truncated_text = text[:limit]
+        last_sentence_end = truncated_text.rfind('.')
+        if last_sentence_end != -1:
+            return truncated_text[:last_sentence_end + 1]
+        return truncated_text
+    
+    content_no_emojis = truncate_to_limit(content_no_emojis, selected_template['limit'])
     
     # Split content into paragraphs
     paragraphs = content_no_emojis.split('\n')
-    while len(paragraphs) < selected_template['paragraphs']:
-        paragraphs.append("")
+    paragraphs = [truncate_to_limit(p, selected_template['limit'] // selected_template['paragraphs']) for p in paragraphs]
+    
+    # Ensure correct number of paragraphs
+    if len(paragraphs) < selected_template['paragraphs']:
+        paragraphs += [""] * (selected_template['paragraphs'] - len(paragraphs))
     
     return '\n\n'.join(paragraphs[:selected_template['paragraphs']])
 
