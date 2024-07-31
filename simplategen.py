@@ -53,7 +53,7 @@ st.markdown(
 st.markdown(
     """
     <div class="logo-container">
-        <img src="https://mir-s3-cdn-cf.behance.net/project_modules/1400/da17b078065083.5cadb8dec2e85.png" alt="Logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/East_Carolina_University.svg/1280px-East_Carolina_University.svg.png" alt="Logo">
     </div>
     """,
     unsafe_allow_html=True
@@ -81,16 +81,19 @@ def remove_emojis(text):
 # Function to generate content using OpenAI
 def generate_content(description, template):
     template_map = {
-        1: {"prompt": "200 characters broken into two paragraphs.", "limit": 200},
-        2: {"prompt": "400 characters broken into four paragraphs.", "limit": 400},
-        3: {"prompt": "600 characters broken into six paragraphs.", "limit": 600},
-        4: {"prompt": "800 characters broken into eight paragraphs.", "limit": 800}
+        1: {"prompt": "200 characters broken into two paragraphs.", "limit": 200, "paragraphs": 2},
+        2: {"prompt": "400 characters broken into four paragraphs.", "limit": 400, "paragraphs": 4},
+        3: {"prompt": "600 characters broken into six paragraphs.", "limit": 600, "paragraphs": 6},
+        4: {"prompt": "800 characters broken into eight paragraphs.", "limit": 800, "paragraphs": 8}
     }
+    
+    selected_template = template_map[template]
     
     prompt = (
         f"Create content based on the following description:\n\n"
         f"{description}\n\n"
-        f"Template: {template_map[template]['prompt']}"
+        f"Template: {selected_template['prompt']}\n"
+        f"Ensure the content is divided into {selected_template['paragraphs']} paragraphs and does not exceed {selected_template['limit']} characters in total. Each paragraph should be approximately {selected_template['limit'] // selected_template['paragraphs']} characters long. The message must be complete and should not cut off mid-sentence."
     )
 
     response = openai.ChatCompletion.create(
@@ -104,14 +107,21 @@ def generate_content(description, template):
     content = response.choices[0].message["content"].strip()
     content_no_emojis = remove_emojis(content)
     
-    # Ensure the content adheres to the character limit
-    if len(content_no_emojis) > template_map[template]['limit']:
-        content_no_emojis = content_no_emojis[:template_map[template]['limit']].rsplit(' ', 1)[0]
+    # Ensure the content adheres to the character limit and is complete
+    if len(content_no_emojis) > selected_template['limit']:
+        truncated_content = content_no_emojis[:selected_template['limit']]
+        last_sentence_end = truncated_content.rfind('.')
+        content_no_emojis = truncated_content[:last_sentence_end+1] if last_sentence_end != -1 else truncated_content
     
-    return content_no_emojis
+    # Split content into paragraphs
+    paragraphs = content_no_emojis.split('\n')
+    while len(paragraphs) < selected_template['paragraphs']:
+        paragraphs.append("")
+    
+    return '\n\n'.join(paragraphs[:selected_template['paragraphs']])
 
 def main():
-    st.title("AI Script Generator")
+    st.title("AI Content Generator")
     st.markdown("---")
 
     # Initialize the session state for generated pages
