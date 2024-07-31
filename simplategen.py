@@ -64,6 +64,9 @@ st.markdown('<div class="app-container">', unsafe_allow_html=True)
 # Load Streamlit secrets for API keys
 openai.api_key = st.secrets["openai_api_key"]
 
+# Create the OpenAI API client
+client = openai
+
 # Function to remove emojis from text
 def remove_emojis(text):
     emoji_pattern = re.compile(
@@ -100,7 +103,6 @@ def generate_content(description, template):
 
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
-        client = OpenAI,
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
@@ -213,7 +215,6 @@ def main():
         ]
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
-            client = OpenAI,
             messages=revision_messages
         )
         revised_content = completion.choices[0].message["content"].strip()
