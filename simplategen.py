@@ -106,7 +106,7 @@ def generate_content(description, template):
     return content_no_emojis
 
 def main():
-    st.title("AI Content Generator")
+    st.title("AI Script Generator")
     st.markdown("---")
 
     # Initialize the session state for generated pages
