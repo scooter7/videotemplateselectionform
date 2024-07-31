@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import openai
+import re
 
 # Add custom CSS to hide the header and toolbar
 st.markdown(
@@ -63,6 +64,20 @@ st.markdown('<div class="app-container">', unsafe_allow_html=True)
 # Load Streamlit secrets for API keys
 openai.api_key = st.secrets["openai_api_key"]
 
+# Function to remove emojis from text
+def remove_emojis(text):
+    emoji_pattern = re.compile(
+        "["
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        u"\U00002702-\U000027B0"
+        u"\U000024C2-\U0001F251"
+        "]+", flags=re.UNICODE
+    )
+    return emoji_pattern.sub(r'', text)
+
 # Function to generate content using OpenAI
 def generate_content(description, template):
     template_map = {
@@ -85,7 +100,10 @@ def generate_content(description, template):
             {"role": "user", "content": prompt}
         ]
     )
-    return response.choices[0].message["content"].strip()
+    
+    content = response.choices[0].message["content"].strip()
+    content_no_emojis = remove_emojis(content)
+    return content_no_emojis
 
 def main():
     st.title("AI Content Generator")
@@ -150,8 +168,9 @@ def main():
         ]
         response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=revision_messages)
         revised_content = response.choices[0].message["content"].strip()
-        st.text(revised_content)
-        st.download_button("Download Revised Content", revised_content, "revised_content_revision.txt", key="download_revised_content")
+        revised_content_no_emojis = remove_emojis(revised_content)
+        st.text(revised_content_no_emojis)
+        st.download_button("Download Revised Content", revised_content_no_emojis, "revised_content_revision.txt", key="download_revised_content")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
