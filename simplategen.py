@@ -93,7 +93,9 @@ def generate_content(description, template):
         f"Create content based on the following description:\n\n"
         f"{description}\n\n"
         f"Template: {selected_template['prompt']}\n"
-        f"Ensure the content is divided into {selected_template['paragraphs']} paragraphs and does not exceed {selected_template['limit']} characters in total. Each paragraph should be approximately {selected_template['limit'] // selected_template['paragraphs']} characters long. The message must be complete and should not cut off mid-sentence."
+        f"Ensure the content is divided into {selected_template['paragraphs']} paragraphs and does not exceed {selected_template['limit']} characters in total. Each paragraph should be approximately {selected_template['limit'] // selected_template['paragraphs']} characters long. The message must be complete and should not cut off mid-sentence.\n"
+        f"Minimum Character Count: {selected_template['limit'] - 50}\n"
+        f"Maximum Character Count: {selected_template['limit']}"
     )
 
     response = openai.ChatCompletion.create(
@@ -126,10 +128,16 @@ def generate_content(description, template):
             if len(current_paragraph) + len(sentence) + 2 <= char_limit:
                 current_paragraph += sentence + '. '
             else:
-                result_paragraphs.append(current_paragraph.strip())
-                current_paragraph = sentence + '. '
-            if len(result_paragraphs) == paragraphs:
-                break
+                if current_paragraph:
+                    result_paragraphs.append(current_paragraph.strip())
+                    current_paragraph = ""
+                if len(sentence) + 2 > char_limit:
+                    parts = [sentence[i:i + char_limit] for i in range(0, len(sentence), char_limit)]
+                    result_paragraphs.extend(parts)
+                else:
+                    current_paragraph = sentence + '. '
+                if len(result_paragraphs) == paragraphs:
+                    break
 
         if current_paragraph and len(result_paragraphs) < paragraphs:
             result_paragraphs.append(current_paragraph.strip())
