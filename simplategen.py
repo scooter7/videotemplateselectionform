@@ -106,7 +106,7 @@ def generate_content(description, template):
     
     content = response.choices[0].message["content"].strip()
     content_no_emojis = remove_emojis(content)
-    
+
     # Ensure the content adheres to the character limit and is complete
     def truncate_to_limit(text, limit):
         if len(text) <= limit:
@@ -116,18 +116,33 @@ def generate_content(description, template):
         if last_sentence_end != -1:
             return truncated_text[:last_sentence_end + 1]
         return truncated_text
-    
-    content_no_emojis = truncate_to_limit(content_no_emojis, selected_template['limit'])
-    
-    # Split content into paragraphs
-    paragraphs = content_no_emojis.split('\n')
-    paragraphs = [truncate_to_limit(p, selected_template['limit'] // selected_template['paragraphs']) for p in paragraphs]
-    
-    # Ensure correct number of paragraphs
-    if len(paragraphs) < selected_template['paragraphs']:
-        paragraphs += [""] * (selected_template['paragraphs'] - len(paragraphs))
-    
-    return '\n\n'.join(paragraphs[:selected_template['paragraphs']])
+
+    def enforce_paragraph_limits(text, paragraphs, char_limit):
+        sentences = text.split('. ')
+        result_paragraphs = []
+        current_paragraph = ""
+
+        for sentence in sentences:
+            if len(current_paragraph) + len(sentence) + 2 <= char_limit:
+                current_paragraph += sentence + '. '
+            else:
+                result_paragraphs.append(current_paragraph.strip())
+                current_paragraph = sentence + '. '
+            if len(result_paragraphs) == paragraphs:
+                break
+
+        if current_paragraph and len(result_paragraphs) < paragraphs:
+            result_paragraphs.append(current_paragraph.strip())
+
+        while len(result_paragraphs) < paragraphs:
+            result_paragraphs.append("")
+
+        return result_paragraphs[:paragraphs]
+
+    paragraphs = enforce_paragraph_limits(content_no_emojis, selected_template['paragraphs'], selected_template['limit'] // selected_template['paragraphs'])
+    content_no_emojis = '\n\n'.join(paragraphs)
+
+    return content_no_emojis
 
 def main():
     st.title("AI Content Generator")
