@@ -63,7 +63,7 @@ st.markdown('<div class="app-container">', unsafe_allow_html=True)
 
 # Load Streamlit secrets for API keys
 openai.api_key = st.secrets["openai_api_key"]
-
+client = OpenAI
 # Function to remove emojis from text
 def remove_emojis(text):
     emoji_pattern = re.compile(
