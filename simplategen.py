@@ -98,7 +98,9 @@ def generate_content(description, template):
         f"Maximum Character Count: {selected_template['limit']}"
     )
 
-    completion = client.chat.completions.create(
+    client = openai.ChatCompletion
+
+    completion = client.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
@@ -106,7 +108,7 @@ def generate_content(description, template):
         ]
     )
     
-    content = response.choices[0].message["content"].strip()
+    content = completion.choices[0].message["content"].strip()
     content_no_emojis = remove_emojis(content)
 
     # Ensure the content adheres to the character limit and ends with complete sentences
@@ -210,7 +212,8 @@ def main():
             {"role": "user", "content": pasted_content},
             {"role": "user", "content": revision_requests}
         ]
-        response = openai.ChatCompletion.create(model="gpt-4o-mini", messages=revision_messages)
+        client = openai.ChatCompletion
+        response = client.create(model="gpt-4o-mini", messages=revision_messages)
         revised_content = response.choices[0].message["content"].strip()
         revised_content_no_emojis = remove_emojis(revised_content)
         st.text(revised_content_no_emojis)
