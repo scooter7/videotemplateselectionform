@@ -81,16 +81,16 @@ def remove_emojis(text):
 # Function to generate content using OpenAI
 def generate_content(description, template):
     template_map = {
-        1: "200 characters broken into two paragraphs.",
-        2: "400 characters broken into four paragraphs.",
-        3: "600 characters broken into six paragraphs.",
-        4: "800 characters broken into eight paragraphs."
+        1: {"prompt": "200 characters broken into two paragraphs.", "limit": 200},
+        2: {"prompt": "400 characters broken into four paragraphs.", "limit": 400},
+        3: {"prompt": "600 characters broken into six paragraphs.", "limit": 600},
+        4: {"prompt": "800 characters broken into eight paragraphs.", "limit": 800}
     }
     
     prompt = (
         f"Create content based on the following description:\n\n"
         f"{description}\n\n"
-        f"Template: {template_map[template]}"
+        f"Template: {template_map[template]['prompt']}"
     )
 
     response = openai.ChatCompletion.create(
@@ -103,6 +103,11 @@ def generate_content(description, template):
     
     content = response.choices[0].message["content"].strip()
     content_no_emojis = remove_emojis(content)
+    
+    # Ensure the content adheres to the character limit
+    if len(content_no_emojis) > template_map[template]['limit']:
+        content_no_emojis = content_no_emojis[:template_map[template]['limit']].rsplit(' ', 1)[0]
+    
     return content_no_emojis
 
 def main():
