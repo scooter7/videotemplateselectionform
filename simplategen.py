@@ -111,7 +111,8 @@ def main():
             last_name = row["last_name"]
             email = row["email"]
             description = row["description"]
-            template = int(row["template"])
+            template_str = row["template"]
+            template = int(template_str.split()[-1])  # Extract the numeric part from the template string
 
             generated_content = generate_content(description, template)
             generated_pages.append((first_name, last_name, email, description, generated_content))
