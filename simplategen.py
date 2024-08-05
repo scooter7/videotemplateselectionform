@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import openai
 import re
+import requests
 
 # Add custom CSS to hide the header and toolbar
 st.markdown(
@@ -81,22 +82,34 @@ def remove_emojis(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Function to get example file content from GitHub
+def get_example_file_content(filename):
+    url = f"https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/{filename}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.text
+    else:
+        return ""
+
 # Function to generate content using OpenAI's gpt-4o-mini
 def generate_content(description, template):
     template_map = {
-        1: {"prompt": "200 characters broken into two paragraphs.", "limit": 200, "paragraphs": 2},
-        2: {"prompt": "400 characters broken into four paragraphs.", "limit": 400, "paragraphs": 4},
-        3: {"prompt": "600 characters broken into six paragraphs.", "limit": 600, "paragraphs": 6},
-        4: {"prompt": "800 characters broken into eight paragraphs.", "limit": 800, "paragraphs": 8}
+        1: {"prompt": "239 characters broken into six paragraphs.", "limit": 239, "paragraphs": 6, "example_file": "Template1.txt"},
+        2: {"prompt": "400 characters broken into four paragraphs.", "limit": 400, "paragraphs": 4, "example_file": "Template2.txt"},
+        3: {"prompt": "600 characters broken into six paragraphs.", "limit": 600, "paragraphs": 6, "example_file": "Template3.txt"},
+        4: {"prompt": "800 characters broken into eight paragraphs.", "limit": 800, "paragraphs": 8, "example_file": "Template4.txt"}
     }
-    
+
     selected_template = template_map[template]
-    
+    example_content = get_example_file_content(selected_template['example_file'])
+
     prompt = (
         f"Create content based on the following description:\n\n"
         f"{description}\n\n"
         f"Template: {selected_template['prompt']}\n"
         f"Ensure the content is divided into {selected_template['paragraphs']} paragraphs and does not exceed {selected_template['limit']} characters in total. Each paragraph should be approximately {selected_template['limit'] // selected_template['paragraphs']} characters long. The message must be complete and should not cut off mid-sentence.\n"
+        f"Use the following example as a reference for structure and style, but do not copy it verbatim:\n\n"
+        f"{example_content}\n"
         f"Minimum Character Count: {selected_template['limit'] - 50}\n"
         f"Maximum Character Count: {selected_template['limit']}"
     )
@@ -108,7 +121,7 @@ def generate_content(description, template):
             {"role": "user", "content": prompt}
         ]
     )
-    
+
     content = completion.choices[0].message.content.strip()
     content_no_emojis = remove_emojis(content)
 
