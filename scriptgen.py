@@ -62,26 +62,43 @@ st.markdown(
 st.markdown('<div class="app-container">', unsafe_allow_html=True)
 
 # Function to download CSV from GitHub
+@st.cache_data
 def load_template_data():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
-    return pd.read_csv(url)
+    try:
+        df = pd.read_csv(url)
+        st.write("CSV Data Loaded Successfully")  # Debug: Show that the data loaded
+        return df
+    except Exception as e:
+        st.error(f"Error loading CSV: {e}")
+        return pd.DataFrame()  # Return empty dataframe if failed
 
 # Load the template data
 template_data = load_template_data()
 
 # Function to generate text based on description and selected template
 def generate_text(template_number, description, template_data):
+    if template_data.empty:
+        return "Template data is not available."
+
     # Filter the template data based on the selected template number
-    template_df = template_data[template_data['Template'] == f'Template {template_number}']
+    template_filter = f"Template {template_number}"
+    template_df = template_data[template_data['Template'] == template_filter]
+
+    if template_df.empty:
+        return f"No data found for {template_filter}"
+
+    st.write(f"Found {len(template_df)} rows for {template_filter}")  # Debug: Show the number of rows found
 
     output_text = []
-    
+
+    # Iterate over columns C-BN (skip first two columns: Template and Description)
     for idx, row in template_df.iterrows():
-        for col in template_df.columns[2:]:  # Skip the first two columns (Template and Description)
+        for col in template_df.columns[2:]:
             text_element = row[col]
-            if pd.notna(text_element):  # Skip empty cells
+            if pd.notna(text_element):  # Only process non-empty cells
                 element_label = col.replace('_', ' ')  # Use column name as label
-                # Ensure text adheres to description and format constraints
+                # Customize text element with the user's description
                 customized_text = f"{element_label}: {text_element}"
                 output_text.append(customized_text)
 
@@ -90,7 +107,6 @@ def generate_text(template_number, description, template_data):
 
 def main():
     st.title("AI Script Generator")
-
     st.markdown("---")
 
     # Create radio buttons for templates 1-6
@@ -99,17 +115,25 @@ def main():
     # Add a field for entering a description
     description = st.text_area("Enter a description:")
 
+    # Check if template data is loaded correctly
+    if template_data.empty:
+        st.error("Template data could not be loaded. Please check the CSV source.")
+        return
+
     if st.button("Generate Text"):
         generated_text = generate_text(template_number, description, template_data)
-        st.text_area("Generated Content", generated_text, height=300)
+        if not generated_text:
+            st.error("No content generated. Please check the CSV data or description.")
+        else:
+            st.text_area("Generated Content", generated_text, height=300)
 
-        # Download generated content
-        st.download_button(
-            label="Download as Text",
-            data=generated_text,
-            file_name=f"Template_{template_number}_Content.txt",
-            mime="text/plain"
-        )
+            # Download generated content
+            st.download_button(
+                label="Download as Text",
+                data=generated_text,
+                file_name=f"Template_{template_number}_Content.txt",
+                mime="text/plain"
+            )
 
     st.markdown("---")
     st.markdown('</div>', unsafe_allow_html=True)
