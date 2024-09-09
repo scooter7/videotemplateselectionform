@@ -172,13 +172,13 @@ def main():
     if st.button("Generate Content"):
         if description and template_number:
             st.session_state['generated_content'] = generate_content(description, template_number, template_data)
-            st.text_area("Generated Content", st.session_state['generated_content'], height=300)
+            st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content")
         else:
             st.error("Please select a template and enter a description.")
 
     # Show the generated content from session state
     if st.session_state['generated_content']:
-        st.text_area("Generated Content", st.session_state['generated_content'], height=300)
+        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
 
     # Social Media Checkboxes
     st.markdown("---")
@@ -203,7 +203,7 @@ def main():
     if st.session_state['social_content']:
         for channel, content in st.session_state['social_content'].items():
             st.subheader(f"{channel.capitalize()} Post")
-            st.text_area(f"{channel.capitalize()} Content", content, height=200)
+            st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content")
             st.download_button(
                 label=f"Download {channel.capitalize()} Content",
                 data=content,
@@ -215,8 +215,8 @@ def main():
     st.header("Revision Section")
 
     with st.expander("Revision Fields"):
-        pasted_content = st.text_area("Paste Generated Content Here (for further revisions):")
-        revision_requests = st.text_area("Specify Revisions Here:")
+        pasted_content = st.text_area("Paste Generated Content Here (for further revisions):", key="pasted_content")
+        revision_requests = st.text_area("Specify Revisions Here:", key="revision_requests")
 
     if st.button("Revise Further"):
         revision_messages = [
