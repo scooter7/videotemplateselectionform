@@ -89,7 +89,6 @@ def load_template_data():
     try:
         df = pd.read_csv(url)
         st.write("CSV Data Loaded Successfully")
-        st.write("Template column values (for debugging):", df['Template'].unique())  # Show unique template names
         return df
     except Exception as e:
         st.error(f"Error loading CSV: {e}")
@@ -144,6 +143,29 @@ def generate_content(description, template_number, template_data):
 
     return content_no_emojis
 
+# Function to generate social media content for Facebook, LinkedIn, Instagram
+def generate_social_content(main_content, selected_channels):
+    # Social media examples for tone/style reference
+    social_prompts = {
+        "facebook": f"Generate a Facebook post for Shive-Hattery's audience based on the following content:\n{main_content}\nUse a tone and style similar to the posts on https://www.facebook.com/ShiveHattery.",
+        "linkedin": f"Generate a LinkedIn post for Shive-Hattery's audience based on the following content:\n{main_content}\nUse a tone and style similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
+        "instagram": f"Generate an Instagram post for Shive-Hattery's audience based on the following content:\n{main_content}\nUse a tone and style similar to the posts on https://www.instagram.com/shivehattery/."
+    }
+
+    generated_content = {}
+    for channel in selected_channels:
+        prompt = social_prompts[channel]
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        generated_content[channel] = completion.choices[0].message.content.strip()
+    
+    return generated_content
+
 def main():
     st.title("AI Script Generator")
     st.markdown("---")
@@ -167,6 +189,34 @@ def main():
                 file_name=f"Template_{template_number}_Content.txt",
                 mime="text/plain"
             )
+
+            # Social Media Checkboxes
+            st.markdown("---")
+            st.header("Generate Social Media Posts")
+            facebook = st.checkbox("Facebook")
+            linkedin = st.checkbox("LinkedIn")
+            instagram = st.checkbox("Instagram")
+
+            selected_channels = []
+            if facebook:
+                selected_channels.append("facebook")
+            if linkedin:
+                selected_channels.append("linkedin")
+            if instagram:
+                selected_channels.append("instagram")
+
+            if selected_channels and st.button("Generate Social Media Content"):
+                social_content = generate_social_content(generated_content, selected_channels)
+                
+                for channel, content in social_content.items():
+                    st.subheader(f"{channel.capitalize()} Post")
+                    st.text_area(f"{channel.capitalize()} Content", content, height=200)
+                    st.download_button(
+                        label=f"Download {channel.capitalize()} Content",
+                        data=content,
+                        file_name=f"{channel}_post.txt",
+                        mime="text/plain"
+                    )
         else:
             st.error("Please select a template and enter a description.")
 
