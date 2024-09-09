@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import openai
+import re
 import requests
 
 # Add custom CSS to hide the header and toolbar
@@ -61,81 +62,116 @@ st.markdown(
 
 st.markdown('<div class="app-container">', unsafe_allow_html=True)
 
-# Function to download CSV from GitHub
+# Load Streamlit secrets for API keys
+openai.api_key = st.secrets["openai_api_key"]
+
+# Create the OpenAI API client
+client = openai
+
+# Function to remove emojis from text
+def remove_emojis(text):
+    emoji_pattern = re.compile(
+        "["
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        u"\U00002702-\U000027B0"
+        u"\U000024C2-\U0001F251"
+        "]+", flags=re.UNICODE
+    )
+    return emoji_pattern.sub(r'', text)
+
+# Load the CSV data from GitHub (Templates CSV)
 @st.cache_data
 def load_template_data():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
     try:
         df = pd.read_csv(url)
-        st.write("CSV Data Loaded Successfully")  # Debug: Show that the data loaded
+        st.write("CSV Data Loaded Successfully")
         return df
     except Exception as e:
         st.error(f"Error loading CSV: {e}")
         return pd.DataFrame()  # Return empty dataframe if failed
 
-# Load the template data
 template_data = load_template_data()
 
-# Function to generate text based on description and selected template
-def generate_text(template_number, description, template_data):
-    if template_data.empty:
-        return "Template data is not available."
-
+# Function to generate content using OpenAI's gpt-4o-mini
+def generate_content(description, template, template_data):
     # Filter the template data based on the selected template number
-    template_filter = f"Template {template_number}"
-    template_df = template_data[template_data['Template'] == template_filter]
+    template_row = template_data[template_data['Template'] == f'Template {template}']
 
-    if template_df.empty:
-        return f"No data found for {template_filter}"
+    if template_row.empty:
+        return f"No data found for Template {template}"
 
-    st.write(f"Found {len(template_df)} rows for {template_filter}")  # Debug: Show the number of rows found
+    # We now have the filtered row for the selected template
+    st.write(f"Using template: {template}")
+    
+    prompt = f"Create content based on the following description:\n\n{description}\n\n"
+    prompt += "The output must match the structure and style of the example content from the CSV."
 
-    output_text = []
+    # Call OpenAI API to generate content based on the description and template structure
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    
+    content = completion.choices[0].message.content.strip()
+    content_no_emojis = remove_emojis(content)
 
-    # Iterate over columns C-BN (skip first two columns: Template and Description)
-    for idx, row in template_df.iterrows():
-        for col in template_df.columns[2:]:
-            text_element = row[col]
-            if pd.notna(text_element):  # Only process non-empty cells
-                element_label = col.replace('_', ' ')  # Use column name as label
-                # Customize text element with the user's description
-                customized_text = f"{element_label}: {text_element}"
-                output_text.append(customized_text)
-
-    # Join the generated text elements
-    return '\n'.join(output_text)
+    return content_no_emojis
 
 def main():
     st.title("AI Script Generator")
     st.markdown("---")
 
-    # Create radio buttons for templates 1-6
+    # Show a radio button for selecting the template (Templates 1-6)
     template_number = st.radio("Select Template", [1, 2, 3, 4, 5, 6])
 
     # Add a field for entering a description
     description = st.text_area("Enter a description:")
 
-    # Check if template data is loaded correctly
-    if template_data.empty:
-        st.error("Template data could not be loaded. Please check the CSV source.")
-        return
+    # Generate content when the button is clicked
+    if st.button("Generate Content"):
+        if description and template_number:
+            generated_content = generate_content(description, template_number, template_data)
+            st.text_area("Generated Content", generated_content, height=300)
 
-    if st.button("Generate Text"):
-        generated_text = generate_text(template_number, description, template_data)
-        if not generated_text:
-            st.error("No content generated. Please check the CSV data or description.")
-        else:
-            st.text_area("Generated Content", generated_text, height=300)
-
-            # Download generated content
+            # Download the generated content
             st.download_button(
                 label="Download as Text",
-                data=generated_text,
+                data=generated_content,
                 file_name=f"Template_{template_number}_Content.txt",
                 mime="text/plain"
             )
+        else:
+            st.error("Please select a template and enter a description.")
 
     st.markdown("---")
+    st.header("Revision Section")
+
+    with st.expander("Revision Fields"):
+        pasted_content = st.text_area("Paste Generated Content Here (for further revisions):")
+        revision_requests = st.text_area("Specify Revisions Here:")
+
+    if st.button("Revise Further"):
+        revision_messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": pasted_content},
+            {"role": "user", "content": revision_requests}
+        ]
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=revision_messages
+        )
+        revised_content = completion.choices[0].message.content.strip()
+        revised_content_no_emojis = remove_emojis(revised_content)
+        st.text(revised_content_no_emojis)
+        st.download_button("Download Revised Content", revised_content_no_emojis, "revised_content_revision.txt", key="download_revised_content")
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
