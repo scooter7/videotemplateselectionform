@@ -68,8 +68,9 @@ openai.api_key = st.secrets["openai_api_key"]
 # Create the OpenAI API client
 client = openai
 
-# Function to remove emojis from text
-def remove_emojis(text):
+# Function to remove emojis and asterisks from text
+def clean_text(text):
+    text = re.sub(r'\*\*', '', text)  # Remove asterisks
     emoji_pattern = re.compile(
         "["
         u"\U0001F600-\U0001F64F"  # emoticons
@@ -89,7 +90,6 @@ def load_template_data():
     try:
         df = pd.read_csv(url)
         st.write("CSV Data Loaded Successfully")
-        st.write("Template column values (for debugging):", df['Template'].unique())  # Show unique template names
         return df
     except Exception as e:
         st.error(f"Error loading CSV: {e}")
@@ -99,38 +99,25 @@ template_data = load_template_data()
 
 # Function to extract text elements from the template CSV and build the OpenAI prompt
 def build_template_prompt(template_number, description, template_data):
-    # Normalize template names by stripping whitespace and converting to lowercase
     template_data['Template'] = template_data['Template'].str.strip().str.lower()
-    
-    # Filter the template data for the selected template
     template_filter = f"template {template_number}".lower()
     template_row = template_data[template_data['Template'] == template_filter]
 
     if template_row.empty:
         return f"No data found for Template {template_number}"
 
-    # Build the prompt based on text elements from columns C-BN
-    prompt = f"Create content based on the following description:\n\n{description}\n\n"
-    prompt += "Use the following structure and style for each text element:\n\n"
+    prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
     
-    # Iterate through the columns C-BN for the selected row to construct the prompt
-    for col in template_row.columns[2:]:  # Columns C-BN
-        text_element = template_row[col].values[0]  # Extract the first (and only) value for this column
-        if pd.notna(text_element):  # Ensure the column is not empty
+    for col in template_row.columns[2:]:  # Skip the first two columns (Template and Description)
+        text_element = template_row[col].values[0]
+        if pd.notna(text_element):  # Only process non-empty cells
             prompt += f"{col}: {text_element}\n"
-    
-    prompt += "\nEnsure the content matches the character limits and style for each element."
-    
-    st.write(f"Generated prompt for OpenAI:\n{prompt}")  # Debug: Show the prompt
 
     return prompt
 
 # Function to generate content using OpenAI's GPT-4o-mini
 def generate_content(description, template_number, template_data):
-    # Build the prompt based on the template and description
     prompt = build_template_prompt(template_number, description, template_data)
-
-    # Call OpenAI API to generate content based on the constructed prompt
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -138,44 +125,98 @@ def generate_content(description, template_number, template_data):
             {"role": "user", "content": prompt}
         ]
     )
-    
     content = completion.choices[0].message.content.strip()
-    content_no_emojis = remove_emojis(content)
+    content_clean = clean_text(content)  # Remove asterisks and emojis
+    return content_clean
 
-    return content_no_emojis
+# Function to generate social media content for Facebook, LinkedIn, Instagram
+def generate_social_content(main_content, selected_channels):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
+        "linkedin": f"Generate a LinkedIn post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
+        "instagram": f"Generate an Instagram post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.instagram.com/shivehattery/."
+    }
 
+    generated_content = {}
+    for channel in selected_channels:
+        prompt = social_prompts[channel]
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        generated_content[channel] = clean_text(completion.choices[0].message.content.strip())  # Clean the content
+    
+    return generated_content
+
+# Main function with session state handling
 def main():
     st.title("AI Script Generator")
     st.markdown("---")
 
-    # Show a radio button for selecting the template (Templates 1-6)
+    # Initialize session state variables
+    if 'generated_content' not in st.session_state:
+        st.session_state['generated_content'] = ""
+    if 'social_content' not in st.session_state:
+        st.session_state['social_content'] = {}
+
+    # Radio button for selecting the template (Templates 1-6)
     template_number = st.radio("Select Template", [1, 2, 3, 4, 5, 6])
 
-    # Add a field for entering a description
+    # Description field
     description = st.text_area("Enter a description:")
 
-    # Generate content when the button is clicked
+    # Generate main content
     if st.button("Generate Content"):
         if description and template_number:
-            generated_content = generate_content(description, template_number, template_data)
-            st.text_area("Generated Content", generated_content, height=300)
-
-            # Download the generated content
-            st.download_button(
-                label="Download as Text",
-                data=generated_content,
-                file_name=f"Template_{template_number}_Content.txt",
-                mime="text/plain"
-            )
+            st.session_state['generated_content'] = generate_content(description, template_number, template_data)
+            st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content")
         else:
             st.error("Please select a template and enter a description.")
+
+    # Show the generated content from session state
+    if st.session_state['generated_content']:
+        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
+
+    # Social Media Checkboxes
+    st.markdown("---")
+    st.header("Generate Social Media Posts")
+    facebook = st.checkbox("Facebook")
+    linkedin = st.checkbox("LinkedIn")
+    instagram = st.checkbox("Instagram")
+
+    selected_channels = []
+    if facebook:
+        selected_channels.append("facebook")
+    if linkedin:
+        selected_channels.append("linkedin")
+    if instagram:
+        selected_channels.append("instagram")
+
+    # Generate social media content
+    if selected_channels and st.button("Generate Social Media Content"):
+        st.session_state['social_content'] = generate_social_content(st.session_state['generated_content'], selected_channels)
+
+    # Display social media content if available
+    if st.session_state['social_content']:
+        for channel, content in st.session_state['social_content'].items():
+            st.subheader(f"{channel.capitalize()} Post")
+            st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content")
+            st.download_button(
+                label=f"Download {channel.capitalize()} Content",
+                data=content,
+                file_name=f"{channel}_post.txt",
+                mime="text/plain"
+            )
 
     st.markdown("---")
     st.header("Revision Section")
 
     with st.expander("Revision Fields"):
-        pasted_content = st.text_area("Paste Generated Content Here (for further revisions):")
-        revision_requests = st.text_area("Specify Revisions Here:")
+        pasted_content = st.text_area("Paste Generated Content Here (for further revisions):", key="pasted_content")
+        revision_requests = st.text_area("Specify Revisions Here:", key="revision_requests")
 
     if st.button("Revise Further"):
         revision_messages = [
@@ -188,9 +229,9 @@ def main():
             messages=revision_messages
         )
         revised_content = completion.choices[0].message.content.strip()
-        revised_content_no_emojis = remove_emojis(revised_content)
-        st.text(revised_content_no_emojis)
-        st.download_button("Download Revised Content", revised_content_no_emojis, "revised_content_revision.txt", key="download_revised_content")
+        revised_content_clean = clean_text(revised_content)  # Clean the revised content
+        st.text(revised_content_clean)
+        st.download_button("Download Revised Content", revised_content_clean, "revised_content_revision.txt", key="download_revised_content")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
