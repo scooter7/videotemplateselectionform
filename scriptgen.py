@@ -97,28 +97,40 @@ def load_template_data():
 
 template_data = load_template_data()
 
-# Function to generate content using OpenAI's gpt-4o-mini
-def generate_content(description, template, template_data):
+# Function to extract text elements from the template CSV and build the OpenAI prompt
+def build_template_prompt(template_number, description, template_data):
     # Normalize template names by stripping whitespace and converting to lowercase
     template_data['Template'] = template_data['Template'].str.strip().str.lower()
     
-    # Convert the template selection to lowercase and match with normalized data
-    template_filter = f"template {template}".lower()
+    # Filter the template data for the selected template
+    template_filter = f"template {template_number}".lower()
     template_row = template_data[template_data['Template'] == template_filter]
 
-    # Debugging: Show the filtered result
-    st.write(f"Filtered data for '{template_filter}':", template_row)
-
     if template_row.empty:
-        return f"No data found for Template {template}"
+        return f"No data found for Template {template_number}"
 
-    # We now have the filtered row for the selected template
-    st.write(f"Using template: {template}")
-    
+    # Build the prompt based on text elements from columns C-BN
     prompt = f"Create content based on the following description:\n\n{description}\n\n"
-    prompt += "The output must match the structure and style of the example content from the CSV."
+    prompt += "Use the following structure and style for each text element:\n\n"
+    
+    # Iterate through the columns C-BN for the selected row to construct the prompt
+    for col in template_row.columns[2:]:  # Columns C-BN
+        text_element = template_row[col].values[0]  # Extract the first (and only) value for this column
+        if pd.notna(text_element):  # Ensure the column is not empty
+            prompt += f"{col}: {text_element}\n"
+    
+    prompt += "\nEnsure the content matches the character limits and style for each element."
+    
+    st.write(f"Generated prompt for OpenAI:\n{prompt}")  # Debug: Show the prompt
 
-    # Call OpenAI API to generate content based on the description and template structure
+    return prompt
+
+# Function to generate content using OpenAI's GPT-4o-mini
+def generate_content(description, template_number, template_data):
+    # Build the prompt based on the template and description
+    prompt = build_template_prompt(template_number, description, template_data)
+
+    # Call OpenAI API to generate content based on the constructed prompt
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
