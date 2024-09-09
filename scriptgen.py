@@ -89,6 +89,7 @@ def load_template_data():
     try:
         df = pd.read_csv(url)
         st.write("CSV Data Loaded Successfully")
+        st.write("Template column values (for debugging):", df['Template'].unique())  # Show unique template names
         return df
     except Exception as e:
         st.error(f"Error loading CSV: {e}")
@@ -98,8 +99,15 @@ template_data = load_template_data()
 
 # Function to generate content using OpenAI's gpt-4o-mini
 def generate_content(description, template, template_data):
-    # Filter the template data based on the selected template number
-    template_row = template_data[template_data['Template'] == f'Template {template}']
+    # Normalize template names by stripping whitespace and converting to lowercase
+    template_data['Template'] = template_data['Template'].str.strip().str.lower()
+    
+    # Convert the template selection to lowercase and match with normalized data
+    template_filter = f"template {template}".lower()
+    template_row = template_data[template_data['Template'] == template_filter]
+
+    # Debugging: Show the filtered result
+    st.write(f"Filtered data for '{template_filter}':", template_row)
 
     if template_row.empty:
         return f"No data found for Template {template}"
