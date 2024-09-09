@@ -68,8 +68,9 @@ openai.api_key = st.secrets["openai_api_key"]
 # Create the OpenAI API client
 client = openai
 
-# Function to remove emojis from text
-def remove_emojis(text):
+# Function to remove emojis and asterisks from text
+def clean_text(text):
+    text = re.sub(r'\*\*', '', text)  # Remove asterisks
     emoji_pattern = re.compile(
         "["
         u"\U0001F600-\U0001F64F"  # emoticons
@@ -125,9 +126,8 @@ def generate_content(description, template_number, template_data):
         ]
     )
     content = completion.choices[0].message.content.strip()
-    content_no_emojis = remove_emojis(content)
-
-    return content_no_emojis
+    content_clean = clean_text(content)  # Remove asterisks and emojis
+    return content_clean
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
@@ -147,7 +147,7 @@ def generate_social_content(main_content, selected_channels):
                 {"role": "user", "content": prompt}
             ]
         )
-        generated_content[channel] = completion.choices[0].message.content.strip()
+        generated_content[channel] = clean_text(completion.choices[0].message.content.strip())  # Clean the content
     
     return generated_content
 
@@ -229,9 +229,9 @@ def main():
             messages=revision_messages
         )
         revised_content = completion.choices[0].message.content.strip()
-        revised_content_no_emojis = remove_emojis(revised_content)
-        st.text(revised_content_no_emojis)
-        st.download_button("Download Revised Content", revised_content_no_emojis, "revised_content_revision.txt", key="download_revised_content")
+        revised_content_clean = clean_text(revised_content)  # Clean the revised content
+        st.text(revised_content_clean)
+        st.download_button("Download Revised Content", revised_content_clean, "revised_content_revision.txt", key="download_revised_content")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
