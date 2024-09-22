@@ -97,7 +97,7 @@ def load_template_data():
 
 template_data = load_template_data()
 
-# Function to build a prompt based on description and use the template for style/structure
+# Function to extract text elements from the template CSV and build the OpenAI prompt
 def build_template_prompt(template_number, description, template_data):
     template_data['Template'] = template_data['Template'].str.strip().str.lower()
     template_filter = f"template {template_number}".lower()
@@ -106,8 +106,8 @@ def build_template_prompt(template_number, description, template_data):
     if template_row.empty:
         return f"No data found for Template {template_number}"
 
-    prompt = f"Generate content focusing on the following description:\n\n'{description}'\n\nUse the tone, structure, and style from the following template as guidance but do not use any text from the template verbatim:\n\n"
-
+    prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
+    
     for col in template_row.columns[2:]:  # Skip the first two columns (Template and Description)
         text_element = template_row[col].values[0]
         if pd.notna(text_element):  # Only process non-empty cells
@@ -119,30 +119,29 @@ def build_template_prompt(template_number, description, template_data):
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     completion = client.chat.completions.create(
-        model="gpt-4o",  # Switched to GPT-4o model
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
     )
-    
-    # Process the response and insert column titles from the spreadsheet as text labels only if the section is applicable
     content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)
+    content_clean = clean_text(content)  # Remove asterisks and emojis
     
-    # Get the column headings from the template as labels and only use those that have content in the template
+    # Process the template columns and align with content
+    template_row = template_data[template_data['Template'] == f'template {template_number}'.lower()]
     template_columns = template_data.columns[2:]  # Skip Template and Description columns
-    template_row = template_data[template_data['Template'] == f"template {template_number}".lower()]
     
-    content_lines = content_clean.split('\n')
-    content_with_labels = ""
+    # Only output relevant labels for sections with content in the template
+    final_output = ""
+    content_lines = content_clean.split("\n")
     
     for i, col in enumerate(template_columns):
         text_element = template_row[col].values[0]
-        if pd.notna(text_element) and i < len(content_lines):  # Only add sections with content
-            content_with_labels += f"{col}: {content_lines[i]}\n"
+        if pd.notna(text_element) and i < len(content_lines):
+            final_output += f"{col}: {content_lines[i]}\n"
 
-    return content_with_labels
+    return final_output
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
@@ -197,6 +196,10 @@ def main():
             )
         else:
             st.error("Please select a template and enter a description.")
+
+    # Show the generated content from session state
+    if st.session_state['generated_content']:
+        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
 
     # Social Media Checkboxes
     st.markdown("---")
