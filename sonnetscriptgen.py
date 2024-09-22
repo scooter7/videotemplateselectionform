@@ -124,10 +124,10 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": full_prompt}]
     )
     
-    # Print out the completion object to inspect its structure
-    st.write(completion)
-
-    return None  # Temporarily return None to prevent errors while inspecting
+    # Extract content from the 'completion' object
+    content = completion['content'][0].text.strip()
+    content_clean = clean_text(content)  # Remove asterisks and emojis
+    return content_clean
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
@@ -148,8 +148,8 @@ def generate_social_content(main_content, selected_channels):
             max_tokens=1000,
             messages=[{"role": "user", "content": full_prompt}]
         )
-        # For now, inspect the completion structure
-        st.write(completion)
+        # Extract content from the 'completion' object
+        generated_content[channel] = clean_text(completion['content'][0].text.strip())  # Clean the content
     
     return generated_content
 
@@ -201,6 +201,18 @@ def main():
     if selected_channels and st.button("Generate Social Media Content"):
         st.session_state['social_content'] = generate_social_content(st.session_state['generated_content'], selected_channels)
 
+    # Display social media content if available
+    if st.session_state['social_content']:
+        for channel, content in st.session_state['social_content'].items():
+            st.subheader(f"{channel.capitalize()} Post")
+            st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content")
+            st.download_button(
+                label=f"Download {channel.capitalize()} Content",
+                data=content,
+                file_name=f"{channel}_post.txt",
+                mime="text/plain"
+            )
+
     st.markdown("---")
     st.header("Revision Section")
 
@@ -217,8 +229,10 @@ def main():
             max_tokens=1000,
             messages=[{"role": "user", "content": revision_prompt}]
         )
-        # Print out the completion object to inspect its structure
-        st.write(completion)
+        # Extract content from the 'completion' object
+        revised_content = clean_text(completion['content'][0].text.strip())  # Clean the revised content
+        st.text(revised_content)
+        st.download_button("Download Revised Content", revised_content, "revised_content_revision.txt", key="download_revised_content")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
