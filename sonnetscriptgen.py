@@ -118,14 +118,14 @@ def generate_content(description, template_number, template_data):
     full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
     
     # Request completion from Claude
-    completion = anthropic_client.messages.create(
+    response = anthropic_client.messages.create(
         model="claude-3-5-sonnet-20240620",
         max_tokens=1000,
         messages=[{"role": "user", "content": full_prompt}]
     )
     
-    # Extract content from the completion object
-    content = completion['completion']
+    # Extract content from the response object correctly
+    content = response['completion'].strip()
     content_clean = clean_text(content)  # Clean the content (removing emojis and asterisks)
 
     return content_clean
@@ -144,14 +144,14 @@ def generate_social_content(main_content, selected_channels):
         full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
         
         # Request completion for social content
-        completion = anthropic_client.messages.create(
+        response = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1000,
             messages=[{"role": "user", "content": full_prompt}]
         )
         
-        # Extract content from the completion object
-        generated_content[channel] = clean_text(completion['completion'])
+        # Extract content from the response object correctly
+        generated_content[channel] = clean_text(response['completion'].strip())
     
     return generated_content
 
@@ -230,14 +230,14 @@ def main():
         revision_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {pasted_content}\n{HUMAN_PROMPT} {revision_requests}{AI_PROMPT}"
         
         # Request revision completion
-        completion = anthropic_client.messages.create(
+        response = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1000,
             messages=[{"role": "user", "content": revision_prompt}]
         )
         
         # Extract the revised content
-        revised_content = clean_text(completion['completion'])
+        revised_content = clean_text(response['completion'].strip())
         st.text(revised_content)
         st.download_button(
             label="Download Revised Content",
