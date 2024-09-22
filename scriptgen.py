@@ -106,7 +106,8 @@ def build_template_prompt(template_number, description, template_data):
     if template_row.empty:
         return f"No data found for Template {template_number}"
 
-    prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
+    # Adjust the prompt to focus on the user description and use the template as a guide
+    prompt = f"Create content using the following description as the main focus:\n\n'{description}'\n\nUse the following structure and tone for guidance, but do not copy verbatim:\n\n"
     
     for col in template_row.columns[2:]:  # Skip the first two columns (Template and Description)
         text_element = template_row[col].values[0]
