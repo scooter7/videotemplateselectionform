@@ -126,28 +126,42 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": prompt}]
     )
     
+    # Print the raw response for debugging purposes
+    st.write("Raw API Response:", response)
+    
     # Extract the content from the response
     try:
         if 'content' in response and len(response['content']) > 0:
             # Extract the first item in the content list
             raw_content = response['content'][0]
             
-            # Use regex to extract the actual text inside TextBlock(text="...")
-            content_match = re.search(r'text="(.*?)"', raw_content)
+            # Print the raw content for debugging
+            st.write("Raw Content Extracted:", raw_content)
             
-            if content_match:
-                content = content_match.group(1)
-                # Replace escaped newlines with actual newlines for better formatting
-                content = content.replace("\\n", "\n")
+            # Check if the content has 'TextBlock' and extract the actual text
+            if 'TextBlock' in raw_content:
+                # Extract the actual text inside the TextBlock
+                content_match = re.search(r'text="(.*?)"', raw_content)
+                
+                if content_match:
+                    content = content_match.group(1)
+                    # Print the extracted content for debugging
+                    st.write("Extracted Content:", content)
+                    # Replace escaped newlines with actual newlines
+                    content = content.replace("\\n", "\n")
+                else:
+                    content = "Error: Unable to parse content from TextBlock."
             else:
-                content = "Error: Unable to parse content from TextBlock."
+                content = "Error: 'TextBlock' not found in raw content."
         else:
-            content = "Error: Unable to retrieve content from response."
+            content = "Error: No content found in response."
     except Exception as e:
         content = f"An error occurred: {e}"
     
-    # Clean the content
-    content_clean = clean_text(content)  # Remove asterisks and emojis
+    # Clean the content (optional)
+    content_clean = clean_text(content)
+    
+    # Return the cleaned content
     return content_clean
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
