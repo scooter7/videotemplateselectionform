@@ -131,6 +131,25 @@ def validate_content_length(content, template_number, template_data):
         return False, validation_errors
     return True, "Content is within character limits."
 
+def modify_content(content, validation_errors):
+    for error in validation_errors:
+        section = error.split(" ")[0]  # Extract the section name
+        limit = int(re.search(r'(\d+)', error).group(1))  # Extract the character limit from the message
+        content_section = re.search(f'{section}: (.+)', content)
+        if content_section:
+            content_text = content_section.group(1)
+            prompt = f"Reduce the following text to {limit} characters or fewer while keeping it cohesive:\n\n{content_text}"
+            completion = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            modified_text = completion.choices[0].message.content.strip()
+            content = content.replace(content_text, modified_text)
+    return content
+
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     completion = client.chat.completions.create(
@@ -145,12 +164,10 @@ def generate_content(description, template_number, template_data):
 
     is_valid, validation_result = validate_content_length(content_clean, template_number, template_data)
 
-    if not is_valid:
-        st.error("Validation failed:")
-        for error in validation_result:
-            st.error(error)
-        return ""
-    
+    while not is_valid:
+        content_clean = modify_content(content_clean, validation_result)
+        is_valid, validation_result = validate_content_length(content_clean, template_number, template_data)
+
     return content_clean
 
 def generate_social_content(main_content, selected_channels):
