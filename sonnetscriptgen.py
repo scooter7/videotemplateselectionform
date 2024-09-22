@@ -131,6 +131,7 @@ def generate_content(description, template_number, template_data):
     
     # Extract the content from the response
     try:
+        # Check if the 'content' key exists and has data
         if 'content' in response and len(response['content']) > 0:
             # Extract the first item in the content list
             raw_content = response['content'][0]
@@ -138,19 +139,14 @@ def generate_content(description, template_number, template_data):
             # Print the raw content for debugging
             st.write("Raw Content Extracted:", raw_content)
             
-            # Check if the content has 'TextBlock' and extract the actual text
+            # Extract the actual text from within TextBlock
             if 'TextBlock' in raw_content:
-                # Extract the actual text inside the TextBlock
-                content_match = re.search(r'text="(.*?)"', raw_content)
+                # Extract text between "text=" and ", type='text'" safely
+                content = re.search(r'text="(.+?)"', raw_content).group(1)
+                st.write("Extracted Content:", content)  # Print extracted content for debugging
                 
-                if content_match:
-                    content = content_match.group(1)
-                    # Print the extracted content for debugging
-                    st.write("Extracted Content:", content)
-                    # Replace escaped newlines with actual newlines
-                    content = content.replace("\\n", "\n")
-                else:
-                    content = "Error: Unable to parse content from TextBlock."
+                # Replace escaped newlines with actual newlines
+                content = content.replace("\\n", "\n")
             else:
                 content = "Error: 'TextBlock' not found in raw content."
         else:
