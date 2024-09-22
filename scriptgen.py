@@ -95,7 +95,7 @@ def build_template_prompt(template_number, description, template_data):
     template_filter = f"template {template_number}".lower()
     template_row = template_data[template_data['Template'] == template_filter]
 
-    if template_row.empty:  # Corrected this line
+    if template_row.empty:
         return f"No data found for Template {template_number}"
 
     prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
@@ -132,15 +132,14 @@ def validate_content_length(content, template_number, template_data):
     return True, "Content is within character limits."
 
 def modify_content_batch(content, validation_errors):
-    # Create a single batch prompt to handle multiple modifications
     batch_prompt = ""
     for error in validation_errors:
-        section = error.split(" ")[0]  # Extract the section name
-        limit = int(re.search(r'(\d+)', error).group(1))  # Extract the character limit
+        section = error.split(" ")[0]
+        limit = int(re.search(r'(\d+)', error).group(1))
         content_section = re.search(f'{section}: (.+)', content)
         if content_section:
             content_text = content_section.group(1)
-            batch_prompt += f"Rewrite the following text to fit within {limit} characters while preserving full ideas and avoiding abbreviations:\n\n{content_text}\n\n"
+            batch_prompt += f"Rewrite the following to stay within {limit} characters while keeping complete ideas without abbreviations:\n\n{content_text}\n\n"
 
     if batch_prompt:
         completion = client.chat.completions.create(
@@ -152,7 +151,6 @@ def modify_content_batch(content, validation_errors):
         )
         modified_texts = completion.choices[0].message.content.strip().split("\n\n")
         
-        # Replace the original content with the modified text
         for error, modified_text in zip(validation_errors, modified_texts):
             section = error.split(" ")[0]
             content_section = re.search(f'{section}: (.+)', content)
