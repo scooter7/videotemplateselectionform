@@ -173,6 +173,13 @@ def main():
         if description and template_number:
             st.session_state['generated_content'] = generate_content(description, template_number, template_data)
             st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content")
+            # Add download button for the generated content
+            st.download_button(
+                label="Download Generated Content",
+                data=st.session_state['generated_content'],
+                file_name="generated_content.txt",
+                mime="text/plain"
+            )
         else:
             st.error("Please select a template and enter a description.")
 
