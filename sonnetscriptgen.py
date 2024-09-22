@@ -126,22 +126,21 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": prompt}]
     )
     
-    # Print the full response to see the structure for debugging
-    st.write("API Response:", response)
-    
-    # Try to extract the content from the response
+    # Extract the content from the response
     try:
         if 'content' in response and len(response['content']) > 0:
             # Extract the first item in the content list
-            content = response['content'][0]
+            raw_content = response['content'][0]
             
-            # If the content contains 'TextBlock', remove that part to extract the actual text
-            if 'TextBlock' in content:
-                # Extract the actual text from within the TextBlock
-                content = re.search(r'text="(.*?)"', content).group(1)
+            # Use regex to extract the actual text inside TextBlock(text="...")
+            content_match = re.search(r'text="(.*?)"', raw_content)
             
-            # Replace escaped newlines with actual newlines for better formatting
-            content = content.replace("\\n", "\n")
+            if content_match:
+                content = content_match.group(1)
+                # Replace escaped newlines with actual newlines for better formatting
+                content = content.replace("\\n", "\n")
+            else:
+                content = "Error: Unable to parse content from TextBlock."
         else:
             content = "Error: Unable to retrieve content from response."
     except Exception as e:
