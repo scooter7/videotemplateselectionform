@@ -198,7 +198,7 @@ def main():
         st.session_state['social_content'] = generate_social_content(st.session_state['generated_content'], selected_channels)
 
     # Display social media content if available
-    if st.session_state['social_content']():
+    if st.session_state['social_content']:
         for channel, content in st.session_state['social_content'].items():
             st.subheader(f"{channel.capitalize()} Post")
             st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content")
