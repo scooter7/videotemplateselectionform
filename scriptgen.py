@@ -4,6 +4,7 @@ import openai
 import re
 import requests
 
+# Add custom CSS to hide the header and toolbar
 st.markdown(
     """
     <style>
@@ -15,6 +16,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Add logo
 st.markdown(
     """
     <style>
@@ -60,23 +62,28 @@ st.markdown(
 
 st.markdown('<div class="app-container">', unsafe_allow_html=True)
 
+# Load Streamlit secrets for API keys
 openai.api_key = st.secrets["openai_api_key"]
+
+# Create the OpenAI API client
 client = openai
 
+# Function to remove emojis and asterisks from text
 def clean_text(text):
-    text = re.sub(r'\*\*', '', text)
+    text = re.sub(r'\*\*', '', text)  # Remove asterisks
     emoji_pattern = re.compile(
-        "["
-        u"\U0001F600-\U0001F64F"
-        u"\U0001F300-\U0001F5FF"
-        u"\U0001F680-\U0001F6FF"
-        u"\U0001F1E0-\U0001F1FF"
+        "[" 
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
         u"\U00002702-\U000027B0"
         u"\U000024C2-\U0001F251"
         "]+", flags=re.UNICODE
     )
     return emoji_pattern.sub(r'', text)
 
+# Load the CSV data from GitHub (Templates CSV)
 @st.cache_data
 def load_template_data():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -86,10 +93,11 @@ def load_template_data():
         return df
     except Exception as e:
         st.error(f"Error loading CSV: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame()  # Return empty dataframe if failed
 
 template_data = load_template_data()
 
+# Function to extract text elements from the template CSV and build the OpenAI prompt
 def build_template_prompt(template_number, description, template_data):
     template_data['Template'] = template_data['Template'].str.strip().str.lower()
     template_filter = f"template {template_number}".lower()
@@ -100,85 +108,28 @@ def build_template_prompt(template_number, description, template_data):
 
     prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
     
-    for col in template_row.columns[2:]:
+    for col in template_row.columns[2:]:  # Skip the first two columns (Template and Description)
         text_element = template_row[col].values[0]
-        if pd.notna(text_element):
+        if pd.notna(text_element):  # Only process non-empty cells
             prompt += f"{col}: {text_element}\n"
 
     return prompt
 
-def validate_content_length(content, template_number, template_data):
-    template_data['Template'] = template_data['Template'].str.strip().str.lower()
-    template_filter = f"template {template_number}".lower()
-    template_row = template_data[template_data['Template'] == template_filter]
-
-    if template_row.empty:
-        return False, [f"No data found for Template {template_number}"]
-
-    validation_errors = []
-
-    for col in template_row.columns[2:]:
-        placeholder_text = template_row[col].values[0]
-        if pd.notna(placeholder_text):
-            char_limit = len(placeholder_text)
-            content_section = re.search(f'{col}: (.+)', content)
-            if content_section:
-                content_text = content_section.group(1)
-                if len(content_text) > char_limit:
-                    validation_errors.append(f"{col} exceeds the limit of {char_limit} characters, based on the placeholder.")
-
-    if validation_errors:
-        return False, validation_errors
-    return True, "Content is within character limits."
-
-def modify_content_batch(content, validation_errors):
-    batch_prompt = ""
-    for error in validation_errors:
-        section = error.split(" ")[0]
-        limit = int(re.search(r'(\d+)', error).group(1))
-        content_section = re.search(f'{section}: (.+)', content)
-        if content_section:
-            content_text = content_section.group(1)
-            batch_prompt += f"Rewrite the following to stay within {limit} characters while keeping complete ideas without abbreviations:\n\n{content_text}\n\n"
-
-    if batch_prompt:
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": batch_prompt}
-            ]
-        )
-        modified_texts = completion.choices[0].message.content.strip().split("\n\n")
-        
-        for error, modified_text in zip(validation_errors, modified_texts):
-            section = error.split(" ")[0]
-            content_section = re.search(f'{section}: (.+)', content)
-            if content_section:
-                content_text = content_section.group(1)
-                content = content.replace(content_text, modified_text)
-
-    return content
-
+# Function to generate content using OpenAI's GPT-4o
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",  # Switched to GPT-4o model
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
     )
     content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)
-
-    is_valid, validation_result = validate_content_length(content_clean, template_number, template_data)
-
-    if not is_valid:
-        content_clean = modify_content_batch(content_clean, validation_result)
-    
+    content_clean = clean_text(content)  # Remove asterisks and emojis
     return content_clean
 
+# Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
@@ -190,36 +141,42 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         prompt = social_prompts[channel]
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        generated_content[channel] = clean_text(completion.choices[0].message.content.strip())
+        generated_content[channel] = clean_text(completion.choices[0].message.content.strip())  # Clean the content
     
     return generated_content
 
+# Main function with session state handling
 def main():
     st.title("AI Script Generator")
     st.markdown("---")
 
+    # Initialize session state variables
     if 'generated_content' not in st.session_state:
         st.session_state['generated_content'] = ""
     if 'social_content' not in st.session_state:
         st.session_state['social_content'] = {}
 
+    # Radio button for selecting the template (Templates 1-6)
     template_number = st.radio("Select Template", [1, 2, 3, 4, 5, 6])
 
+    # Description field
     description = st.text_area("Enter a description:")
 
+    # Generate main content
     if st.button("Generate Content"):
         if description and template_number:
             st.session_state['generated_content'] = generate_content(description, template_number, template_data)
-            st.text_area("Generated Content", st.session_state['generated_content'], height=300, key=f"main_content_display_{template_number}")
+            st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content")
         else:
             st.error("Please select a template and enter a description.")
 
+    # Social Media Checkboxes
     st.markdown("---")
     st.header("Generate Social Media Posts")
     facebook = st.checkbox("Facebook")
@@ -234,9 +191,11 @@ def main():
     if instagram:
         selected_channels.append("instagram")
 
+    # Generate social media content
     if selected_channels and st.button("Generate Social Media Content"):
         st.session_state['social_content'] = generate_social_content(st.session_state['generated_content'], selected_channels)
 
+    # Display social media content if available
     if st.session_state['social_content']:
         for channel, content in st.session_state['social_content'].items():
             st.subheader(f"{channel.capitalize()} Post")
@@ -262,11 +221,11 @@ def main():
             {"role": "user", "content": revision_requests}
         ]
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=revision_messages
         )
         revised_content = completion.choices[0].message.content.strip()
-        revised_content_clean = clean_text(revised_content)
+        revised_content_clean = clean_text(revised_content)  # Clean the revised content
         st.text(revised_content_clean)
         st.download_button("Download Revised Content", revised_content_clean, "revised_content_revision.txt", key="download_revised_content")
 
