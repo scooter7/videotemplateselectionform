@@ -141,7 +141,7 @@ def generate_social_content(main_content, selected_channels):
         full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
         
         completion = anthropic_client.completions.create(
-            model="claude-sonnet-3.5",
+            model="claude-3-5-sonnet-20240620",
             prompt=full_prompt,
             max_tokens_to_sample=1000
         )
@@ -219,7 +219,7 @@ def main():
     if st.button("Revise Further"):
         revision_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {pasted_content}\n{HUMAN_PROMPT} {revision_requests}{AI_PROMPT}"
         completion = anthropic_client.completions.create(
-            model="claude-sonnet-3.5",
+            model="claude-3-5-sonnet-20240620",
             prompt=revision_prompt,
             max_tokens_to_sample=1000
         )
