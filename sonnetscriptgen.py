@@ -116,17 +116,31 @@ def build_template_prompt(template_number, description, template_data):
     return prompt
 
 # Function to generate content using Anthropic's Claude model
-# Function to generate content using Anthropic's Claude model
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
+    
+    # Make the request to the Anthropic API
     response = client.messages.create(
         model="claude-3-5-sonnet-20240620",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}]
     )
-    content = response['completion'].strip()
+    
+    # Print the response to check its structure
+    st.write(response)  # Streamlit function to display response on the page for debugging
+    
+    # Assuming the 'completion' key might not exist, check and adjust
+    if 'completion' in response:
+        content = response['completion'].strip()
+    elif 'choices' in response and len(response['choices']) > 0:
+        content = response['choices'][0]['message']['content'].strip()
+    else:
+        content = "Error: Unable to retrieve content from response."
+    
+    # Clean the content
     content_clean = clean_text(content)  # Remove asterisks and emojis
     return content_clean
+
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
