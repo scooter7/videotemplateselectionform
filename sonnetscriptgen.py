@@ -133,22 +133,22 @@ def generate_content(description, template_number, template_data):
     try:
         # Check if the 'content' key exists and has data
         if 'content' in response and len(response['content']) > 0:
-            # Extract the first item in the content list
+            # Extract the first item in the content list, which is a string
             raw_content = response['content'][0]
             
             # Print the raw content for debugging
             st.write("Raw Content Extracted:", raw_content)
             
-            # Extract the actual text from within TextBlock
-            if 'TextBlock' in raw_content:
-                # Extract text between "text=" and ", type='text'" safely
-                content = re.search(r'text="(.+?)"', raw_content).group(1)
-                st.write("Extracted Content:", content)  # Print extracted content for debugging
-                
-                # Replace escaped newlines with actual newlines
-                content = content.replace("\\n", "\n")
-            else:
-                content = "Error: 'TextBlock' not found in raw content."
+            # Since the content is a string, we don't need to use regex here
+            # Let's simply extract everything between `text="` and `", type='text'`
+            start = raw_content.find('text="') + 6  # Find the start index after `text="`
+            end = raw_content.find('", type=')  # Find the end index before `", type=`
+            content = raw_content[start:end]  # Extract the actual content
+            
+            st.write("Extracted Content:", content)  # Print the extracted content
+            
+            # Replace escaped newlines with actual newlines
+            content = content.replace("\\n", "\n")
         else:
             content = "Error: No content found in response."
     except Exception as e:
