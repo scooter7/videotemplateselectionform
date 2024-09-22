@@ -117,16 +117,17 @@ def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
     
-    # Correct usage of `messages.create`
+    # Request completion from Claude
     completion = anthropic_client.messages.create(
         model="claude-3-5-sonnet-20240620",
         max_tokens=1000,
         messages=[{"role": "user", "content": full_prompt}]
     )
     
-    # Extract the text content from the completion response correctly
-    content = completion['content'][0]['text'].strip()
-    content_clean = clean_text(content)  # Remove asterisks and emojis
+    # Extract content from the completion object
+    content = completion['completion']
+    content_clean = clean_text(content)  # Clean the content (removing emojis and asterisks)
+
     return content_clean
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
@@ -142,14 +143,15 @@ def generate_social_content(main_content, selected_channels):
         prompt = social_prompts[channel]
         full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
         
-        # Correct usage of `messages.create`
+        # Request completion for social content
         completion = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1000,
             messages=[{"role": "user", "content": full_prompt}]
         )
-        # Extract content from the 'completion' object correctly
-        generated_content[channel] = clean_text(completion['content'][0]['text'].strip())  # Clean the content
+        
+        # Extract content from the completion object
+        generated_content[channel] = clean_text(completion['completion'])
     
     return generated_content
 
@@ -175,6 +177,12 @@ def main():
         if description and template_number:
             st.session_state['generated_content'] = generate_content(description, template_number, template_data)
             st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content")
+            st.download_button(
+                label="Download Generated Content",
+                data=st.session_state['generated_content'],
+                file_name="generated_content.txt",
+                mime="text/plain"
+            )
         else:
             st.error("Please select a template and enter a description.")
 
@@ -201,8 +209,6 @@ def main():
     if selected_channels and st.button("Generate Social Media Content"):
         st.session_state['social_content'] = generate_social_content(st.session_state['generated_content'], selected_channels)
 
-    # Display social media content if available
-    if st.session_state['social_content']:
         for channel, content in st.session_state['social_content'].items():
             st.subheader(f"{channel.capitalize()} Post")
             st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content")
@@ -223,16 +229,22 @@ def main():
     if st.button("Revise Further"):
         revision_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {pasted_content}\n{HUMAN_PROMPT} {revision_requests}{AI_PROMPT}"
         
-        # Correct usage of `messages.create`
+        # Request revision completion
         completion = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1000,
             messages=[{"role": "user", "content": revision_prompt}]
         )
-        # Extract content from the 'completion' object
-        revised_content = clean_text(completion['content'][0]['text'].strip())  # Clean the revised content
+        
+        # Extract the revised content
+        revised_content = clean_text(completion['completion'])
         st.text(revised_content)
-        st.download_button("Download Revised Content", revised_content, "revised_content_revision.txt", key="download_revised_content")
+        st.download_button(
+            label="Download Revised Content",
+            data=revised_content,
+            file_name="revised_content.txt",
+            mime="text/plain"
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
