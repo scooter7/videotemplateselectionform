@@ -127,21 +127,7 @@ def generate_content(description, template_number, template_data):
     )
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)  # Remove asterisks and emojis
-    
-    # Process the template columns and align with content
-    template_row = template_data[template_data['Template'] == f'template {template_number}'.lower()]
-    template_columns = template_data.columns[2:]  # Skip Template and Description columns
-    
-    # Only output relevant labels for sections with content in the template
-    final_output = ""
-    content_lines = content_clean.split("\n")
-    
-    for i, col in enumerate(template_columns):
-        text_element = template_row[col].values[0]
-        if pd.notna(text_element) and i < len(content_lines):
-            final_output += f"{col}: {content_lines[i]}\n"
-
-    return final_output
+    return content_clean
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
@@ -196,10 +182,6 @@ def main():
             )
         else:
             st.error("Please select a template and enter a description.")
-
-    # Show the generated content from session state
-    if st.session_state['generated_content']:
-        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
 
     # Social Media Checkboxes
     st.markdown("---")
