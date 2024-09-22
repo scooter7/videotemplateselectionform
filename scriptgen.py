@@ -138,7 +138,7 @@ def modify_content(content, validation_errors):
         content_section = re.search(f'{section}: (.+)', content)
         if content_section:
             content_text = content_section.group(1)
-            prompt = f"Reduce the following text to {limit} characters or fewer while keeping it cohesive:\n\n{content_text}"
+            prompt = f"Rewrite the following text to make it shorter, but keep it cohesive and under {limit} characters:\n\n{content_text}"
             completion = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -207,12 +207,12 @@ def main():
     if st.button("Generate Content"):
         if description and template_number:
             st.session_state['generated_content'] = generate_content(description, template_number, template_data)
-            st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
+            st.text_area("Generated Content", st.session_state['generated_content'], height=300, key=f"main_content_display_{template_number}")
         else:
             st.error("Please select a template and enter a description.")
 
     if st.session_state['generated_content']:
-        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
+        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key=f"main_content_display_final_{template_number}")
 
     st.markdown("---")
     st.header("Generate Social Media Posts")
