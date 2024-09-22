@@ -66,7 +66,7 @@ st.markdown('<div class="app-container">', unsafe_allow_html=True)
 anthropic_api_key = st.secrets["anthropic_api_key"]
 
 # Create the Anthropic API client
-client = anthropic.Client(anthropic_api_key)
+client = Anthropic(api_key=anthropic_api_key)
 
 # Function to remove emojis and asterisks from text
 def clean_text(text):
@@ -118,12 +118,10 @@ def build_template_prompt(template_number, description, template_data):
 # Function to generate content using Anthropic's Claude model
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
-    response = client.messages.create(
+    response = client.completions.create(
         model="claude-3-5-sonnet-20240620",
         max_tokens=1024,
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
+        messages=[HUMAN_PROMPT + prompt]
     )
     content = response['completion'].strip()
     content_clean = clean_text(content)  # Remove asterisks and emojis
@@ -140,12 +138,10 @@ def generate_social_content(main_content, selected_channels):
     generated_content = {}
     for channel in selected_channels:
         prompt = social_prompts[channel]
-        response = client.messages.create(
+        response = client.completions.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1024,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            messages=[HUMAN_PROMPT + prompt]
         )
         generated_content[channel] = clean_text(response['completion'].strip())  # Clean the content
     
@@ -220,10 +216,10 @@ def main():
 
     if st.button("Revise Further"):
         revision_messages = [
-            {"role": "user", "content": pasted_content},
-            {"role": "user", "content": revision_requests}
+            HUMAN_PROMPT + pasted_content,
+            HUMAN_PROMPT + revision_requests
         ]
-        response = client.messages.create(
+        response = client.completions.create(
             model="claude-3-5-sonnet-20240620",
             max_tokens=1024,
             messages=revision_messages
