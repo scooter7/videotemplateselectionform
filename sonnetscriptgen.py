@@ -118,10 +118,10 @@ def generate_content(description, template_number, template_data):
     full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
     
     # Request completion from Claude
-    response = anthropic_client.messages.create(
+    response = anthropic_client.completions.create(
         model="claude-3-5-sonnet-20240620",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": full_prompt}]
+        prompt=full_prompt,
+        max_tokens_to_sample=1000,
     )
     
     # Extract content from the response object correctly
@@ -144,14 +144,15 @@ def generate_social_content(main_content, selected_channels):
         full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
         
         # Request completion for social content
-        response = anthropic_client.messages.create(
+        response = anthropic_client.completions.create(
             model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": full_prompt}]
+            prompt=full_prompt,
+            max_tokens_to_sample=1000,
         )
         
         # Extract content from the response object correctly
-        generated_content[channel] = clean_text(response.completion.strip())
+        content = response.completion.strip()
+        generated_content[channel] = clean_text(content)
     
     return generated_content
 
@@ -230,15 +231,15 @@ def main():
         revision_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {pasted_content}\n{HUMAN_PROMPT} {revision_requests}{AI_PROMPT}"
         
         # Request revision completion
-        response = anthropic_client.messages.create(
+        response = anthropic_client.completions.create(
             model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": revision_prompt}]
+            prompt=revision_prompt,
+            max_tokens_to_sample=1000,
         )
         
         # Extract the revised content
         revised_content = clean_text(response.completion.strip())
-        st.text(revised_content)
+        st.text_area("Revised Content", revised_content, height=300)
         st.download_button(
             label="Download Revised Content",
             data=revised_content,
