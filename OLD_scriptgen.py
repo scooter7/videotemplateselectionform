@@ -97,7 +97,7 @@ def load_template_data():
 
 template_data = load_template_data()
 
-# Function to build a prompt based on description and use the template for style/structure
+# Function to extract text elements from the template CSV and build the OpenAI prompt
 def build_template_prompt(template_number, description, template_data):
     template_data['Template'] = template_data['Template'].str.strip().str.lower()
     template_filter = f"template {template_number}".lower()
@@ -106,8 +106,8 @@ def build_template_prompt(template_number, description, template_data):
     if template_row.empty:
         return f"No data found for Template {template_number}"
 
-    prompt = f"Generate content focusing on the following description:\n\n'{description}'\n\nUse the tone, structure, and style from the following template as guidance but do not use any text from the template verbatim:\n\n"
-
+    prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
+    
     for col in template_row.columns[2:]:  # Skip the first two columns (Template and Description)
         text_element = template_row[col].values[0]
         if pd.notna(text_element):  # Only process non-empty cells
@@ -119,7 +119,7 @@ def build_template_prompt(template_number, description, template_data):
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     completion = client.chat.completions.create(
-        model="gpt-4o",  # Switched to GPT-4o model
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
