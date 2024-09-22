@@ -138,7 +138,7 @@ def modify_content(content, validation_errors):
         content_section = re.search(f'{section}: (.+)', content)
         if content_section:
             content_text = content_section.group(1)
-            prompt = f"Rewrite the following text in a complete and concise way under {limit} characters. Keep it meaningful and cohesive:\n\n{content_text}"
+            prompt = f"Rewrite the following text to convey a full idea without abbreviations or incomplete words. The text should be as close to {limit} characters as possible while remaining cohesive:\n\n{content_text}"
             completion = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
