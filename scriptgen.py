@@ -115,7 +115,34 @@ def build_template_prompt(template_number, description, template_data):
 
     return prompt
 
-# Function to generate content using OpenAI's GPT-4o-mini
+# Validation function to check if content exceeds the character limit
+def validate_content_length(content, template_number, template_data):
+    template_data['Template'] = template_data['Template'].str.strip().str.lower()
+    template_filter = f"template {template_number}".lower()
+    template_row = template_data[template_data['Template'] == template_filter]
+
+    # Define the maximum characters per section in the CSV (example: 500 for each section)
+    char_limits = {
+        'Section1': 500,
+        'Section2': 300,
+        # Add more sections as per your CSV
+    }
+
+    validation_errors = []
+    
+    # Check content length for each section
+    for section, limit in char_limits.items():
+        content_section = re.search(f'{section}: (.+)', content)
+        if content_section:
+            content_text = content_section.group(1)
+            if len(content_text) > limit:
+                validation_errors.append(f"{section} exceeds the limit of {limit} characters.")
+    
+    if validation_errors:
+        return False, validation_errors
+    return True, "Content is within character limits."
+
+# Modify generate_content to include validation
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     completion = client.chat.completions.create(
@@ -127,6 +154,16 @@ def generate_content(description, template_number, template_data):
     )
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)  # Remove asterisks and emojis
+
+    # Validate the content
+    is_valid, validation_result = validate_content_length(content_clean, template_number, template_data)
+
+    if not is_valid:
+        st.error("Validation failed:")
+        for error in validation_result:
+            st.error(error)
+        return ""
+    
     return content_clean
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
