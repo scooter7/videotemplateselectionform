@@ -116,12 +116,13 @@ def build_template_prompt(template_number, description, template_data):
     return prompt
 
 # Function to generate content using Anthropic's Claude model
+# Function to generate content using Anthropic's Claude model
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
-    response = client.completions.create(
+    response = client.messages.create(
         model="claude-3-5-sonnet-20240620",
         max_tokens=1024,
-        messages=[HUMAN_PROMPT + prompt]
+        messages=[{"role": "user", "content": prompt}]
     )
     content = response['completion'].strip()
     content_clean = clean_text(content)  # Remove asterisks and emojis
