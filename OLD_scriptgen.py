@@ -72,7 +72,7 @@ client = openai
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)  # Remove asterisks
     emoji_pattern = re.compile(
-        "["
+        "[" 
         u"\U0001F600-\U0001F64F"  # emoticons
         u"\U0001F300-\U0001F5FF"  # symbols & pictographs
         u"\U0001F680-\U0001F6FF"  # transport & map symbols
@@ -115,11 +115,11 @@ def build_template_prompt(template_number, description, template_data):
 
     return prompt
 
-# Function to generate content using OpenAI's GPT-4o-mini
+# Function to generate content using OpenAI's GPT-4o
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",  # Switched to GPT-4o model
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
@@ -141,7 +141,7 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         prompt = social_prompts[channel]
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
@@ -173,12 +173,15 @@ def main():
         if description and template_number:
             st.session_state['generated_content'] = generate_content(description, template_number, template_data)
             st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content")
+            # Add download button for the generated content
+            st.download_button(
+                label="Download Generated Content",
+                data=st.session_state['generated_content'],
+                file_name="generated_content.txt",
+                mime="text/plain"
+            )
         else:
             st.error("Please select a template and enter a description.")
-
-    # Show the generated content from session state
-    if st.session_state['generated_content']:
-        st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
 
     # Social Media Checkboxes
     st.markdown("---")
@@ -225,7 +228,7 @@ def main():
             {"role": "user", "content": revision_requests}
         ]
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=revision_messages
         )
         revised_content = completion.choices[0].message.content.strip()
