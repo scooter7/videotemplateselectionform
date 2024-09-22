@@ -126,18 +126,18 @@ def generate_content(description, template_number, template_data):
         ]
     )
     
-    # Process the response and insert section titles
+    # Process the response and insert only sub-section titles
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
     
-    # Add section titles based on the template structure (e.g., Text01, Text01-1, etc.)
-    section_titles = [f"Text{str(i).zfill(2)}" for i in range(1, len(template_data.columns[2:]) + 1)]
+    # Add sub-section titles based on the template structure (e.g., Text02-1, Text02-2, etc.)
+    sub_section_titles = [f"Text{str(i).zfill(2)}-1" for i in range(1, len(template_data.columns[2:]) + 1)]
     content_with_titles = ""
     
     content_lines = content_clean.split('\n')
     for i, line in enumerate(content_lines):
-        section_title = section_titles[i % len(section_titles)]  # Cycle through section titles
-        content_with_titles += f"{section_title}: {line}\n"
+        sub_section_title = sub_section_titles[i % len(sub_section_titles)]  # Cycle through sub-section titles
+        content_with_titles += f"{sub_section_title}: {line}\n"
 
     return content_with_titles
 
