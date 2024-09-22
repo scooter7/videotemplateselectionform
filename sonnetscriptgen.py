@@ -114,16 +114,15 @@ def build_template_prompt(template_number, description, template_data):
 # Function to generate content using the Messages API
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
-    full_prompt = f"{HUMAN_PROMPT}{prompt}{AI_PROMPT}"
-    
-    # Use the Messages API
+    # No need to include the assistant prompt formatting; the Messages API handles that
+    # Using the messages parameter
     response = anthropic_client.messages.create(
         model="claude-3-5-sonnet-20240620",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens_to_sample=1000
+        max_tokens=1000  # Changed to 'max_tokens'
     )
     
     # Extract content from the response object
@@ -145,8 +144,7 @@ def generate_social_content(main_content, selected_channels):
             tone_url = ""
 
         prompt = f"Generate a {channel.capitalize()} post based on the following content:\n{main_content}\nUse a tone similar to the posts on {tone_url}."
-        full_prompt = f"{HUMAN_PROMPT}{prompt}{AI_PROMPT}"
-
+    
         # Use the Messages API
         response = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
@@ -154,7 +152,7 @@ def generate_social_content(main_content, selected_channels):
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens_to_sample=1000
+            max_tokens=1000  # Changed to 'max_tokens'
         )
 
         # Extract content from the response object
@@ -235,7 +233,7 @@ def main():
         revision_requests = st.text_area("Specify Revisions Here:", key="revision_requests")
 
     if st.button("Revise Further"):
-        revision_prompt = f"{HUMAN_PROMPT}{pasted_content}\n\n{revision_requests}{AI_PROMPT}"
+        revision_prompt = f"{pasted_content}\n\n{revision_requests}"
 
         # Use the Messages API
         response = anthropic_client.messages.create(
@@ -244,7 +242,7 @@ def main():
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": revision_prompt}
             ],
-            max_tokens_to_sample=1000
+            max_tokens=1000  # Changed to 'max_tokens'
         )
 
         # Extract the revised content
