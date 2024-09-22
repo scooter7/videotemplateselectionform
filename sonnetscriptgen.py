@@ -59,12 +59,8 @@ def generate_content(description, template_number, template_data):
         system="You are a helpful assistant.",
         max_tokens=1000
     )
-    # Extract the assistant's reply
-    assistant_message = next((msg for msg in response.messages if msg["role"] == "assistant"), None)
-    if assistant_message is not None:
-        content = assistant_message["content"].strip()
-    else:
-        content = ""
+    # Extract the assistant's reply from response.completion
+    content = response.completion.strip()
     content_clean = clean_text(content)
     return content_clean
 
@@ -89,11 +85,7 @@ def generate_social_content(main_content, selected_channels):
             max_tokens=1000
         )
         # Extract the assistant's reply
-        assistant_message = next((msg for msg in response.messages if msg["role"] == "assistant"), None)
-        if assistant_message is not None:
-            content = assistant_message["content"].strip()
-        else:
-            content = ""
+        content = response.completion.strip()
         generated_content[channel] = clean_text(content)
     return generated_content
 
@@ -161,33 +153,25 @@ def main():
         revision_requests = st.text_area("Specify Revisions Here:")
 
     if st.button("Revise Further"):
-        revision_prompt = f"{pasted_content}\n\n{revision_requests}"
+    revision_prompt = f"{pasted_content}\n\n{revision_requests}"
 
-        response = anthropic_client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            messages=[
-                {"role": "user", "content": revision_prompt}
-            ],
-            system="You are a helpful assistant.",
-            max_tokens=1000
-        )
+    response = anthropic_client.messages.create(
+        model="claude-3-5-sonnet-20240620",
+        messages=[
+            {"role": "user", "content": revision_prompt}
+        ],
+        system="You are a helpful assistant.",
+        max_tokens=1000
+    )
 
-        # Extract the assistant's reply
-        assistant_message = next((msg for msg in response.messages if msg["role"] == "assistant"), None)
-        if assistant_message is not None:
-            revised_content = assistant_message["content"].strip()
-        else:
-            revised_content = ""
-        revised_content = clean_text(revised_content)
-        st.text_area("Revised Content", revised_content, height=300)
-        st.download_button(
-            label="Download Revised Content",
-            data=revised_content,
-            file_name="revised_content.txt",
-            mime="text/plain"
-        )
+    # Extract the assistant's reply
+    revised_content = response.completion.strip()
+    revised_content = clean_text(revised_content)
+    st.text_area("Revised Content", revised_content, height=300)
+    st.download_button(
+        label="Download Revised Content",
+        data=revised_content,
+        file_name="revised_content.txt",
+        mime="text/plain"
+    )
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
