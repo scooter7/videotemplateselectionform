@@ -175,7 +175,7 @@ def main():
             st.error("Please select a template and enter a description.")
 
     # Show the generated content from session state
-    if st.session_state['generated_content']():
+    if st.session_state['generated_content']:
         st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
 
     # Social Media Checkboxes
