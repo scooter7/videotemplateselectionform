@@ -124,8 +124,8 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": full_prompt}]
     )
     
-    # Extract content from the 'completion' object correctly
-    content = completion.completion['content'][0].text.strip()  # Extracting based on observed structure
+    # Extract the text content from the completion response correctly
+    content = completion['content'][0]['text'].strip()
     content_clean = clean_text(content)  # Remove asterisks and emojis
     return content_clean
 
@@ -149,7 +149,7 @@ def generate_social_content(main_content, selected_channels):
             messages=[{"role": "user", "content": full_prompt}]
         )
         # Extract content from the 'completion' object correctly
-        generated_content[channel] = clean_text(completion.completion['content'][0].text.strip())  # Clean the content
+        generated_content[channel] = clean_text(completion['content'][0]['text'].strip())  # Clean the content
     
     return generated_content
 
@@ -230,7 +230,7 @@ def main():
             messages=[{"role": "user", "content": revision_prompt}]
         )
         # Extract content from the 'completion' object
-        revised_content = clean_text(completion.completion['content'][0].text.strip())  # Clean the revised content
+        revised_content = clean_text(completion['content'][0]['text'].strip())  # Clean the revised content
         st.text(revised_content)
         st.download_button("Download Revised Content", revised_content, "revised_content_revision.txt", key="download_revised_content")
 
