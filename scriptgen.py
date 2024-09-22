@@ -125,9 +125,21 @@ def generate_content(description, template_number, template_data):
             {"role": "user", "content": prompt}
         ]
     )
+    
+    # Process the response and insert section titles
     content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)  # Remove asterisks and emojis
-    return content_clean
+    content_clean = clean_text(content)
+    
+    # Add section titles based on the template structure (e.g., Text01, Text01-1, etc.)
+    section_titles = [f"Text{str(i).zfill(2)}" for i in range(1, len(template_data.columns[2:]) + 1)]
+    content_with_titles = ""
+    
+    content_lines = content_clean.split('\n')
+    for i, line in enumerate(content_lines):
+        section_title = section_titles[i % len(section_titles)]  # Cycle through section titles
+        content_with_titles += f"{section_title}: {line}\n"
+
+    return content_with_titles
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
