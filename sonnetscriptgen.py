@@ -126,21 +126,16 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": prompt}]
     )
     
-    # Print the response to check its structure
-    st.write(response)  # Streamlit function to display response on the page for debugging
-    
-    # Assuming the 'completion' key might not exist, check and adjust
-    if 'completion' in response:
-        content = response['completion'].strip()
-    elif 'choices' in response and len(response['choices']) > 0:
-        content = response['choices'][0]['message']['content'].strip()
+    # Extract the content from the response
+    if 'content' in response and len(response['content']) > 0:
+        # The response's content is a list, so we extract the first element
+        content = response['content'][0]
     else:
         content = "Error: Unable to retrieve content from response."
     
     # Clean the content
     content_clean = clean_text(content)  # Remove asterisks and emojis
     return content_clean
-
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
@@ -190,6 +185,7 @@ def main():
     # Show the generated content from session state
     if st.session_state['generated_content']:
         st.text_area("Generated Content", st.session_state['generated_content'], height=300, key="main_content_display")
+
 
     # Social Media Checkboxes
     st.markdown("---")
