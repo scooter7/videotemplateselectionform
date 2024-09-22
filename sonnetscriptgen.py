@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import anthropic
+from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 import re
 import requests
 
