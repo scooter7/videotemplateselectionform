@@ -59,7 +59,12 @@ def generate_content(description, template_number, template_data):
         system="You are a helpful assistant.",
         max_tokens=1000
     )
-    content = response.content.strip()
+    # Extract the assistant's reply
+    assistant_message = next((msg for msg in response.messages if msg["role"] == "assistant"), None)
+    if assistant_message is not None:
+        content = assistant_message["content"].strip()
+    else:
+        content = ""
     content_clean = clean_text(content)
     return content_clean
 
@@ -83,7 +88,12 @@ def generate_social_content(main_content, selected_channels):
             system="You are a helpful assistant.",
             max_tokens=1000
         )
-        content = response.content.strip()
+        # Extract the assistant's reply
+        assistant_message = next((msg for msg in response.messages if msg["role"] == "assistant"), None)
+        if assistant_message is not None:
+            content = assistant_message["content"].strip()
+        else:
+            content = ""
         generated_content[channel] = clean_text(content)
     return generated_content
 
@@ -162,7 +172,13 @@ def main():
             max_tokens=1000
         )
 
-        revised_content = clean_text(response.content.strip())
+        # Extract the assistant's reply
+        assistant_message = next((msg for msg in response.messages if msg["role"] == "assistant"), None)
+        if assistant_message is not None:
+            revised_content = assistant_message["content"].strip()
+        else:
+            revised_content = ""
+        revised_content = clean_text(revised_content)
         st.text_area("Revised Content", revised_content, height=300)
         st.download_button(
             label="Download Revised Content",
