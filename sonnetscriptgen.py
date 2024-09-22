@@ -128,8 +128,12 @@ def generate_content(description, template_number, template_data):
     
     # Extract the content from the response
     if 'content' in response and len(response['content']) > 0:
-        # The response's content is a list, so we extract the first element
-        content = response['content'][0]
+        # Extract the raw content which is inside a string representation of TextBlock
+        raw_content = response['content'][0]
+        # Use regex or split to extract the actual text inside the TextBlock
+        content = re.search(r'text="(.+)"', raw_content).group(1)
+        # Replace escaped newlines with actual newlines
+        content = content.replace("\\n", "\n")
     else:
         content = "Error: Unable to retrieve content from response."
     
