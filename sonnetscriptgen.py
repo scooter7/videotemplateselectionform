@@ -124,10 +124,34 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": full_prompt}]
     )
     
-    # The 'completion' object is likely an attribute of the returned object.
-    content = completion.completion.strip()  # Assuming `completion` is an attribute
-    content_clean = clean_text(content)  # Remove asterisks and emojis
-    return content_clean
+    # Print out the completion object to inspect its structure
+    st.write(completion)
+
+    return None  # Temporarily return None to prevent errors while inspecting
+
+# Function to generate social media content for Facebook, LinkedIn, Instagram
+def generate_social_content(main_content, selected_channels):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
+        "linkedin": f"Generate a LinkedIn post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
+        "instagram": f"Generate an Instagram post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.instagram.com/shivehattery/."
+    }
+
+    generated_content = {}
+    for channel in selected_channels:
+        prompt = social_prompts[channel]
+        full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
+        
+        # Correct usage of `messages.create`
+        completion = anthropic_client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": full_prompt}]
+        )
+        # For now, inspect the completion structure
+        st.write(completion)
+    
+    return generated_content
 
 # Main function with session state handling
 def main():
@@ -177,18 +201,6 @@ def main():
     if selected_channels and st.button("Generate Social Media Content"):
         st.session_state['social_content'] = generate_social_content(st.session_state['generated_content'], selected_channels)
 
-    # Display social media content if available
-    if st.session_state['social_content']:
-        for channel, content in st.session_state['social_content'].items():
-            st.subheader(f"{channel.capitalize()} Post")
-            st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content")
-            st.download_button(
-                label=f"Download {channel.capitalize()} Content",
-                data=content,
-                file_name=f"{channel}_post.txt",
-                mime="text/plain"
-            )
-
     st.markdown("---")
     st.header("Revision Section")
 
@@ -205,10 +217,8 @@ def main():
             max_tokens=1000,
             messages=[{"role": "user", "content": revision_prompt}]
         )
-        revised_content = completion['completion'].strip()
-        revised_content_clean = clean_text(revised_content)  # Clean the revised content
-        st.text(revised_content_clean)
-        st.download_button("Download Revised Content", revised_content_clean, "revised_content_revision.txt", key="download_revised_content")
+        # Print out the completion object to inspect its structure
+        st.write(completion)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
