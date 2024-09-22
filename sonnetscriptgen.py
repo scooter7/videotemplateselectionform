@@ -124,32 +124,10 @@ def generate_content(description, template_number, template_data):
         messages=[{"role": "user", "content": full_prompt}]
     )
     
-    content = completion['completion'].strip()
+    # The 'completion' object is likely an attribute of the returned object.
+    content = completion.completion.strip()  # Assuming `completion` is an attribute
     content_clean = clean_text(content)  # Remove asterisks and emojis
     return content_clean
-
-# Function to generate social media content for Facebook, LinkedIn, Instagram
-def generate_social_content(main_content, selected_channels):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
-        "linkedin": f"Generate a LinkedIn post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
-        "instagram": f"Generate an Instagram post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.instagram.com/shivehattery/."
-    }
-
-    generated_content = {}
-    for channel in selected_channels:
-        prompt = social_prompts[channel]
-        full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
-        
-        # Correct usage of `messages.create`
-        completion = anthropic_client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": full_prompt}]
-        )
-        generated_content[channel] = clean_text(completion['completion'].strip())  # Clean the content
-    
-    return generated_content
 
 # Main function with session state handling
 def main():
