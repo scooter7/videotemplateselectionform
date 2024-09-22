@@ -126,17 +126,21 @@ def generate_content(description, template_number, template_data):
         ]
     )
     
-    # Process the response and insert column titles from the spreadsheet as text labels
+    # Process the response and insert column titles from the spreadsheet as text labels only if the section is applicable
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
     
-    # Get the column headings from the template as labels
+    # Get the column headings from the template as labels and only use those that have content in the template
     template_columns = template_data.columns[2:]  # Skip Template and Description columns
-    content_lines = content_clean.split('\n')
+    template_row = template_data[template_data['Template'] == f"template {template_number}".lower()]
     
+    content_lines = content_clean.split('\n')
     content_with_labels = ""
-    for i, (col, line) in enumerate(zip(template_columns, content_lines)):
-        content_with_labels += f"{col}: {line}\n"
+    
+    for i, col in enumerate(template_columns):
+        text_element = template_row[col].values[0]
+        if pd.notna(text_element) and i < len(content_lines):  # Only add sections with content
+            content_with_labels += f"{col}: {content_lines[i]}\n"
 
     return content_with_labels
 
