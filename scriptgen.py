@@ -95,7 +95,7 @@ def build_template_prompt(template_number, description, template_data):
     template_filter = f"template {template_number}".lower()
     template_row = template_data[template_data['Template'] == template_filter]
 
-    if template_row.empty():
+    if template_row.empty:  # Corrected this line
         return f"No data found for Template {template_number}"
 
     prompt = f"Create content based on the following description:\n\n{description}\n\nUse the following structure:\n\n"
