@@ -106,7 +106,6 @@ def build_template_prompt(template_number, description, template_data):
     if template_row.empty:
         return f"No data found for Template {template_number}"
 
-    # Adjust the prompt to focus on the user description and use the template as a guide
     prompt = f"Create content using the following description as the main focus:\n\n'{description}'\n\nUse the following structure and tone for guidance, but do not copy verbatim:\n\n"
     
     for col in template_row.columns[2:]:  # Skip the first two columns (Template and Description)
@@ -128,7 +127,27 @@ def generate_content(description, template_number, template_data):
     )
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)  # Remove asterisks and emojis
-    return content_clean
+    
+    # Split the generated content into lines for label association
+    content_lines = content_clean.split('\n')
+    output = ""
+    
+    # Assign appropriate section labels (Text01, Text01-1, etc.)
+    labels = [
+        'Text01', 'Text01-1', 'Text01-2', '01BG-Theme-Text',
+        'Text02', 'Text02-1', 'Text02-2', 'Text02-3',
+        'Text03', 'Text03-1', 'Text03-2', 'Text03-3', '03BG-Theme-Text',
+        'Text04', 'Text04-1', 'Text04-2', '04BG-Theme-Text',
+        'Text05', 'Text05-1', 'Text05-2', 'Text05-3', '05BG-Theme-Text',
+        'Text06', 'Text06-1', '06BG-Theme-Text', '07BG-Theme-Text',
+        'CTA-Text', 'CTA-Text-1', 'Tagline-Text'
+    ]
+    
+    for i, line in enumerate(content_lines):
+        if i < len(labels):
+            output += f"{labels[i]}: {line.strip()}\n"
+
+    return output
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
