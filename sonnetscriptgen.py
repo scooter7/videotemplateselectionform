@@ -117,10 +117,11 @@ def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
     full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
     
-    completion = anthropic_client.completions.create(
-        model="claude-sonnet-3.5",
-        prompt=full_prompt,
-        max_tokens_to_sample=1000
+    # Correct usage of `messages.create`
+    completion = anthropic_client.messages.create(
+        model="claude-3-5-sonnet-20240620",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": full_prompt}]
     )
     
     content = completion['completion'].strip()
@@ -140,10 +141,11 @@ def generate_social_content(main_content, selected_channels):
         prompt = social_prompts[channel]
         full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
         
-        completion = anthropic_client.completions.create(
+        # Correct usage of `messages.create`
+        completion = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
-            prompt=full_prompt,
-            max_tokens_to_sample=1000
+            max_tokens=1000,
+            messages=[{"role": "user", "content": full_prompt}]
         )
         generated_content[channel] = clean_text(completion['completion'].strip())  # Clean the content
     
@@ -218,10 +220,12 @@ def main():
 
     if st.button("Revise Further"):
         revision_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {pasted_content}\n{HUMAN_PROMPT} {revision_requests}{AI_PROMPT}"
-        completion = anthropic_client.completions.create(
+        
+        # Correct usage of `messages.create`
+        completion = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
-            prompt=revision_prompt,
-            max_tokens_to_sample=1000
+            max_tokens=1000,
+            messages=[{"role": "user", "content": revision_prompt}]
         )
         revised_content = completion['completion'].strip()
         revised_content_clean = clean_text(revised_content)  # Clean the revised content
