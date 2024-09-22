@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import re
-import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 
 # Add custom CSS to hide the header and toolbar
@@ -16,7 +15,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Add logo
+# Add logo and custom styling
 st.markdown(
     """
     <style>
@@ -112,46 +111,54 @@ def build_template_prompt(template_number, description, template_data):
 
     return prompt
 
-# Function to generate content using Claude Sonnet 3.5
+# Function to generate content using the Messages API
 def generate_content(description, template_number, template_data):
     prompt = build_template_prompt(template_number, description, template_data)
-    full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
+    full_prompt = f"{HUMAN_PROMPT}{prompt}{AI_PROMPT}"
     
-    # Request completion from Claude
-    response = anthropic_client.completions.create(
+    # Use the Messages API
+    response = anthropic_client.messages.create(
         model="claude-3-5-sonnet-20240620",
-        prompt=full_prompt,
-        max_tokens_to_sample=1000,
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens_to_sample=1000
     )
     
-    # Extract content from the response object correctly
-    content = response.completion.strip()
-    content_clean = clean_text(content)  # Clean the content (removing emojis and asterisks)
-
+    # Extract content from the response object
+    content = response.content.strip()
+    content_clean = clean_text(content)
     return content_clean
 
-# Function to generate social media content for Facebook, LinkedIn, Instagram
+# Function to generate social media content
 def generate_social_content(main_content, selected_channels):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
-        "linkedin": f"Generate a LinkedIn post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
-        "instagram": f"Generate an Instagram post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.instagram.com/shivehattery/."
-    }
-
     generated_content = {}
     for channel in selected_channels:
-        prompt = social_prompts[channel]
-        full_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {prompt}{AI_PROMPT}"
-        
-        # Request completion for social content
-        response = anthropic_client.completions.create(
+        if channel == "facebook":
+            tone_url = "https://www.facebook.com/ShiveHattery"
+        elif channel == "linkedin":
+            tone_url = "https://www.linkedin.com/company/shive-hattery/"
+        elif channel == "instagram":
+            tone_url = "https://www.instagram.com/shivehattery/"
+        else:
+            tone_url = ""
+
+        prompt = f"Generate a {channel.capitalize()} post based on the following content:\n{main_content}\nUse a tone similar to the posts on {tone_url}."
+        full_prompt = f"{HUMAN_PROMPT}{prompt}{AI_PROMPT}"
+
+        # Use the Messages API
+        response = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
-            prompt=full_prompt,
-            max_tokens_to_sample=1000,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens_to_sample=1000
         )
-        
-        # Extract content from the response object correctly
-        content = response.completion.strip()
+
+        # Extract content from the response object
+        content = response.content.strip()
         generated_content[channel] = clean_text(content)
     
     return generated_content
@@ -228,17 +235,20 @@ def main():
         revision_requests = st.text_area("Specify Revisions Here:", key="revision_requests")
 
     if st.button("Revise Further"):
-        revision_prompt = f"{HUMAN_PROMPT} You are a helpful assistant.\n{HUMAN_PROMPT} {pasted_content}\n{HUMAN_PROMPT} {revision_requests}{AI_PROMPT}"
-        
-        # Request revision completion
-        response = anthropic_client.completions.create(
+        revision_prompt = f"{HUMAN_PROMPT}{pasted_content}\n\n{revision_requests}{AI_PROMPT}"
+
+        # Use the Messages API
+        response = anthropic_client.messages.create(
             model="claude-3-5-sonnet-20240620",
-            prompt=revision_prompt,
-            max_tokens_to_sample=1000,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": revision_prompt}
+            ],
+            max_tokens_to_sample=1000
         )
-        
+
         # Extract the revised content
-        revised_content = clean_text(response.completion.strip())
+        revised_content = clean_text(response.content.strip())
         st.text_area("Revised Content", revised_content, height=300)
         st.download_button(
             label="Download Revised Content",
