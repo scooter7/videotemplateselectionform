@@ -126,20 +126,19 @@ def generate_content(description, template_number, template_data):
         ]
     )
     
-    # Process the response and insert only sub-section titles
+    # Process the response and insert column titles from the spreadsheet as text labels
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
     
-    # Add sub-section titles based on the template structure (e.g., Text02-1, Text02-2, etc.)
-    sub_section_titles = [f"Text{str(i).zfill(2)}-1" for i in range(1, len(template_data.columns[2:]) + 1)]
-    content_with_titles = ""
-    
+    # Get the column headings from the template as labels
+    template_columns = template_data.columns[2:]  # Skip Template and Description columns
     content_lines = content_clean.split('\n')
-    for i, line in enumerate(content_lines):
-        sub_section_title = sub_section_titles[i % len(sub_section_titles)]  # Cycle through sub-section titles
-        content_with_titles += f"{sub_section_title}: {line}\n"
+    
+    content_with_labels = ""
+    for i, (col, line) in enumerate(zip(template_columns, content_lines)):
+        content_with_labels += f"{col}: {line}\n"
 
-    return content_with_titles
+    return content_with_labels
 
 # Function to generate social media content for Facebook, LinkedIn, Instagram
 def generate_social_content(main_content, selected_channels):
