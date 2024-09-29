@@ -95,20 +95,24 @@ def load_google_sheet():
 sheet_data = load_google_sheet()
 
 def build_template_prompt(sheet_row, template_data):
+    job_number = sheet_row['Job Number']
     template_number = sheet_row['Template']
     description = sheet_row['Description']
-    label = sheet_row['Label']
+    
     template_data['Template'] = template_data['Template'].str.strip().str.lower()
     template_filter = f"template {template_number}".lower()
     template_row = template_data[template_data['Template'] == template_filter]
+    
     prompt = f"Create content using the following description as the main focus:\n\n'{description}'\n\nUse the following structure and tone for guidance, but do not copy verbatim:\n\n"
+    
     for col in template_row.columns[2:]:
         text_element = template_row[col].values[0]
         if pd.notna(text_element):
             prompt += f"{col}: {text_element}\n"
-    return prompt, label
+    
+    return prompt, job_number
 
-def generate_content(prompt, label):
+def generate_content(prompt, job_number):
     completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -118,7 +122,7 @@ def generate_content(prompt, label):
     )
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
-    return label + ": " + content_clean
+    return f"Job Number {job_number}: {content_clean}"
 
 def generate_social_content(main_content, selected_channels):
     social_prompts = {
@@ -152,8 +156,8 @@ def main():
     if st.button("Generate Content from Google Sheets and Templates"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            prompt, label = build_template_prompt(row, template_data)
-            generated_content = generate_content(prompt, label)
+            prompt, job_number = build_template_prompt(row, template_data)
+            generated_content = generate_content(prompt, job_number)
             generated_contents.append(generated_content)
         
         full_content = "\n\n".join(generated_contents)
