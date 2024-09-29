@@ -88,9 +88,8 @@ template_data = load_template_data()
 
 @st.cache_data
 def load_google_sheet():
-    conn = GSheetsConnection("connections.gsheets")  # Pass the correct connection name
-    sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-    df = conn.read_sheet(sheet_url)
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read()
     return df
 
 sheet_data = load_google_sheet()
