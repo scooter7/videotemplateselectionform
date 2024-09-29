@@ -97,11 +97,11 @@ def load_template_data():
 
 template_data = load_template_data()
 
-# Connect to Google Sheets using st-gsheets-connection
+# Connect to Google Sheets using st-gsheets-connection and Streamlit secrets
 @st.cache_data
 def load_google_sheet():
     gs_client = connect_to_google_sheets(st.secrets["gcp_service_account"])
-    sheet_url = "https://docs.google.com/spreadsheets/d/1PcbiQInE3phuF6-YVpbZGoXs7ROz_7i2l5vaA1hZWGw/edit?usp=sharing"
+    sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
     sheet = gs_client.open_by_url(sheet_url)
     worksheet = sheet.worksheet("Sheet1")  # Replace with your sheet name
     return pd.DataFrame(worksheet.get_all_records())
