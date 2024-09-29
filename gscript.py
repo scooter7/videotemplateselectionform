@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import openai
-from st_gsheets_connection import connect_to_google_sheets
+from streamlit_gsheets import GSheetsConnection
 
 st.markdown(
     """
@@ -88,12 +88,10 @@ template_data = load_template_data()
 
 @st.cache_data
 def load_google_sheet():
-    gs_client = connect_to_google_sheets(st.secrets["connections"]["gsheets"])
+    conn = GSheetsConnection()
     sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-    sheet = gs_client.open_by_url(sheet_url)
-    worksheet = sheet.worksheet("Sheet1")
-    data = worksheet.get_all_records()
-    return pd.DataFrame(data)
+    df = conn.read_sheet(sheet_url)
+    return df
 
 sheet_data = load_google_sheet()
 
