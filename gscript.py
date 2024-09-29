@@ -161,6 +161,7 @@ def main():
             generated_contents.append(generated_content)
         
         full_content = "\n\n".join(generated_contents)
+        st.session_state['full_content'] = full_content  # Store generated content in session state
         st.text_area("Generated Content", full_content, height=300)
 
         st.download_button(
@@ -184,8 +185,10 @@ def main():
     if instagram:
         selected_channels.append("instagram")
 
-    if selected_channels and st.button("Generate Social Media Content"):
-        st.session_state['social_content'] = generate_social_content(full_content, selected_channels)
+    # Ensure full_content exists before generating social media posts
+    if selected_channels and 'full_content' in st.session_state:
+        if st.button("Generate Social Media Content"):
+            st.session_state['social_content'] = generate_social_content(st.session_state['full_content'], selected_channels)
 
     if 'social_content' in st.session_state:
         for channel, content in st.session_state['social_content'].items():
