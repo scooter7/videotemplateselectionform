@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import re
 import openai
-import gspread
 from google.oauth2.service_account import Credentials
+import gspread
 
 # Hide Streamlit branding
 st.markdown(
@@ -64,9 +64,10 @@ st.markdown(
 
 # Set up Google Sheets API credentials using Streamlit secrets
 credentials_info = st.secrets["google_credentials"]
+scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# Initialize Google Sheets API client
-credentials = Credentials.from_service_account_info(credentials_info)
+# Initialize Google Sheets API client with scopes
+credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
 gc = gspread.authorize(credentials)
 
 # Load Google Sheet data
