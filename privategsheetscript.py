@@ -77,7 +77,7 @@ def load_google_sheet(sheet_name):
     data = pd.DataFrame(sheet.get_all_records())
     return data
 
-sheet_data = load_google_sheet('Your Sheet Name')  # Replace with your Google Sheet name
+sheet_data = load_google_sheet('Sheet1')  # Replace with your Google Sheet name
 
 # OpenAI API key
 openai.api_key = st.secrets["openai_api_key"]
