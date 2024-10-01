@@ -52,16 +52,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Display logo
-st.markdown(
-    """
-    <div class="logo-container">
-        <img src="https://mir-s3-cdn-cf.behance.net/project_modules/1400/da17b078065083.5cadb8dec2e85.png" alt="Logo">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
 # Set up Google Sheets API credentials using Streamlit secrets
 credentials_info = st.secrets["google_credentials"]
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -70,14 +60,27 @@ scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapi
 credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
 gc = gspread.authorize(credentials)
 
+# List available spreadsheets for troubleshooting
+available_sheets = gc.list_spreadsheet_files()
+
+# Display the list of available spreadsheets
+st.write("Available Spreadsheets:")
+for sheet in available_sheets:
+    st.write(f"Title: {sheet['name']}, ID: {sheet['id']}")
+
 # Load Google Sheet data
 @st.cache_data
 def load_google_sheet(sheet_name):
-    sheet = gc.open(sheet_name).sheet1
-    data = pd.DataFrame(sheet.get_all_records())
-    return data
+    try:
+        sheet = gc.open(sheet_name).sheet1
+        data = pd.DataFrame(sheet.get_all_records())
+        return data
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet '{sheet_name}' not found. Please check the name and sharing permissions.")
+        return pd.DataFrame()  # Return an empty dataframe
 
-sheet_data = load_google_sheet('Sheet1')  # Replace with your Google Sheet name
+# Replace 'Your Sheet Name' with the exact sheet name after confirming it from the list
+sheet_data = load_google_sheet('Your Sheet Name')
 
 # OpenAI API key
 openai.api_key = st.secrets["openai_api_key"]
