@@ -74,8 +74,8 @@ def load_google_sheet(sheet_id):
 # Use the correct Spreadsheet ID
 sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
 
-# OpenAI API key
-openai.api_key = st.secrets["openai_api_key"]
+# Access OpenAI API key from [openai] in secrets.toml
+openai.api_key = st.secrets["openai"]["openai_api_key"]
 
 client = openai
 
