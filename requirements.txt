@@ -1,7 +1,9 @@
 streamlit
 pandas
-boto3
 openai
 requests
-anthropic
 st-gsheets-connection
+gspread
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
