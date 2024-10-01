@@ -60,27 +60,19 @@ scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapi
 credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
 gc = gspread.authorize(credentials)
 
-# List available spreadsheets for troubleshooting
-available_sheets = gc.list_spreadsheet_files()
-
-# Display the list of available spreadsheets
-st.write("Available Spreadsheets:")
-for sheet in available_sheets:
-    st.write(f"Title: {sheet['name']}, ID: {sheet['id']}")
-
-# Load Google Sheet data
+# Load Google Sheet data using ID
 @st.cache_data
-def load_google_sheet(sheet_name):
+def load_google_sheet(sheet_id):
     try:
-        sheet = gc.open(sheet_name).sheet1
+        sheet = gc.open_by_key(sheet_id).sheet1
         data = pd.DataFrame(sheet.get_all_records())
         return data
     except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet '{sheet_name}' not found. Please check the name and sharing permissions.")
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found. Please check the ID and sharing permissions.")
         return pd.DataFrame()  # Return an empty dataframe
 
-# Replace 'Your Sheet Name' with the exact sheet name after confirming it from the list
-sheet_data = load_google_sheet('Your Sheet Name')
+# Use the correct Spreadsheet ID
+sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
 
 # OpenAI API key
 openai.api_key = st.secrets["openai_api_key"]
