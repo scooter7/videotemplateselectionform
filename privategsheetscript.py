@@ -124,10 +124,10 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    # Initialize the prompt for the content generation
-    prompt = f"Create content using the following description:\n\n'{topic_description}'\n\n"
-    
-    # Add each section based on the template rules
+    # Initialize the prompt for the content generation (without any commentary)
+    prompt = f"{topic_description}\n\n"  # Only include the topic description as the start
+
+    # Add each section based on the template rules, ensuring no extra commentary is included
     for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
