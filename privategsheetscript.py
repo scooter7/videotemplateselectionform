@@ -128,9 +128,9 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
         template_number_str = "01"  # Default template number in case of invalid format
 
-    # Verify the template data from the examples CSV (template column is 'Template' and description is in 'Description')
+    # Verify the template data from the examples CSV
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
-    
+
     # Debug: Show the template we are looking for
     st.write(f"Looking for template_SH_{template_number_str} in examples.")
 
@@ -138,10 +138,12 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    example_text = example_row['Description'].values[0]  # Column B is 'Description'
-
+    # Dynamically build the prompt based on available fields in the template
     prompt = f"Create content using the following description as the main focus:\n\n'{topic_description}'\n\n"
-    prompt += f"Use the following template as guidance:\n\n{example_text}"
+    for col in example_row.columns[1:]:
+        text_element = example_row[col].values[0]
+        if pd.notna(text_element):
+            prompt += f"{col}: {text_element}\n"
 
     return prompt, job_id
 
