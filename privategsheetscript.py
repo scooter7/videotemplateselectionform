@@ -133,10 +133,10 @@ def build_template_prompt(sheet_row, examples_data):
         if pd.notna(text_element):
             # Ensure we are applying the template rules exactly as required, including character limits
             section_name = col  # Example: 'Text01-1'
-            prompt += f"Section {section_name}: {text_element} (Enforce the template rules strictly, follow section naming and length restrictions).\n"
+            prompt += f"Section {section_name}: {text_element} (Strictly follow the CSV guidelines for this section).\n"
 
     # Final instruction to make sure the model follows each section's rules and doesn't skip any
-    prompt += "\nFollow the exact structure of the template and include every section from the CSV. Do not skip any sections, and ensure the content aligns with the character limits and section names."
+    prompt += "\nStrictly follow the section names and ensure every section is included according to the CSV template. Do not combine sections or skip any parts."
     
     return prompt, job_id
 
