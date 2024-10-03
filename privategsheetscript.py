@@ -76,7 +76,7 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found. Please check the ID and sharing permissions.")
         return pd.DataFrame()  # Return an empty dataframe
 
-# Load examples CSV file from GitHub with debug info
+# Load examples CSV file from GitHub
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
