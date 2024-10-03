@@ -111,25 +111,33 @@ def build_template_prompt(sheet_row, examples_data):
     if "template_SH_" in selected_template:
         try:
             template_number = int(selected_template.split('_')[-1])
-            template_number_str = f"{template_number:02d}"  # Ensure two digits
+            template_number_str = f"{template_number:02d}"  # Ensure two digits (01, 02, ..., 06)
         except ValueError:
-            template_number_str = "01"  # Fallback to default
+            template_number_str = "01"  # Fallback to default if parsing fails
     else:
         template_number_str = "01"  # Fallback to default
 
+    # Retrieve the correct row from the examples data corresponding to the template
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    prompt = f"Create content using the following description:\n\n'{topic_description}'\n\n"
+    # Initialize the prompt for the content generation, adding strict instructions for each section
+    prompt = f"Create content using the following description for Job ID {job_id}:\n\n'{topic_description}'\n\n"
     
-    for col in example_row.columns[1:]:
+    # Add each section based on the template rules from the CSV and strictly apply those rules
+    for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            prompt += f"{col}: {text_element}\n"
+            # Ensure we are applying the template rules exactly as required, including character limits
+            section_name = col  # Example: 'Text01-1'
+            prompt += f"Section {section_name}: {text_element} (Strictly follow the CSV guidelines for this section).\n"
 
+    # Final instruction to make sure the model follows each section's rules and doesn't skip any
+    prompt += "\nStrictly follow the section names and ensure every section is included according to the CSV template. Do not combine sections or skip any parts."
+    
     return prompt, job_id
 
 # Generate content using OpenAI API
@@ -138,13 +146,15 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template without adding commentary or extra explanations. Follow the template rules exactly, including character limits, section names, and theme text."},
                 {"role": "user", "content": prompt}
             ]
         )
         content = completion.choices[0].message.content.strip()
         content_clean = clean_text(content)
-        return f"Job ID {job_id}: {content_clean}"
+
+        # Ensure the content has clearly labeled sections and follows the structure defined in the prompt
+        return f"Job ID {job_id}:\n\n{content_clean}"
     except Exception as e:
         st.error(f"Error generating content: {e}")
         return None
