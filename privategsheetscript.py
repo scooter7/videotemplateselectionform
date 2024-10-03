@@ -128,21 +128,22 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
         template_number_str = "01"  # Default template number in case of invalid format
 
-    # Verify the template data from the examples CSV
+    # Find the matching template row in the CSV
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
 
     if example_row.empty:
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    # Dynamically build the prompt based on available fields in the template, inserting content from the Google Sheet
+    # Dynamically build the prompt using the template structure and the content from the Google Sheet
     prompt = f"{job_id}\n"
     for col in example_row.columns[1:]:
-        template_text = example_row[col].values[0]
-        google_sheet_text = sheet_row.get(col, '')  # Pull corresponding content from Google Sheet based on column name
-
+        template_text = example_row[col].values[0]  # From the CSV
+        google_sheet_text = sheet_row.get(col, '')  # From the Google Sheet content
+        
+        # If the column exists in both the template and the sheet, insert content
         if pd.notna(template_text) and google_sheet_text:
-            prompt += f"{col}: {google_sheet_text}\n"
+            prompt += f"{col}: {google_sheet_text}\n"  # Insert content into the appropriate sections
 
     return prompt, job_id
 
