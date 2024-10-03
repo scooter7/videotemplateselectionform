@@ -136,14 +136,14 @@ def build_template_prompt(sheet_row, examples_data):
         return None, None
 
     # Dynamically build the prompt using the template structure and the content from the Google Sheet
-    prompt = f"{job_id}\n"
+    prompt = ""  # Do not include job ID in the prompt
     for col in example_row.columns[1:]:
         template_text = example_row[col].values[0]  # From the CSV
         google_sheet_text = sheet_row.get(col, '')  # From the Google Sheet content
         
         # If the column exists in both the template and the sheet, insert content
         if pd.notna(template_text) and google_sheet_text:
-            prompt += f"{col}: {google_sheet_text}\n"  # Insert content into the appropriate sections
+            prompt += f"{google_sheet_text}\n"  # Insert content directly without labeling it
 
     return prompt, job_id
 
