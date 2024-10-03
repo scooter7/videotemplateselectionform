@@ -73,42 +73,20 @@ def load_google_sheet(sheet_id):
 
 # Load examples CSV file from GitHub with debug info
 @st.cache_data
+# Load examples CSV file from GitHub with debug info
+@st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
     try:
         examples = pd.read_csv(url)
         st.write("Examples CSV loaded successfully.")
         st.dataframe(examples)  # Display the loaded examples for debugging
+        st.write("Column names in the examples CSV:", examples.columns.tolist())  # Debug: Print column names
         return examples
     except Exception as e:
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
-# Use the correct Spreadsheet ID
-sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
-examples_data = load_examples()
-
-# Access OpenAI API key from [openai] in secrets.toml
-openai.api_key = st.secrets["openai"]["openai_api_key"]
-
-client = openai
-
-# Text cleaning function
-def clean_text(text):
-    text = re.sub(r'\*\*', '', text)
-    emoji_pattern = re.compile(
-        "[" 
-        u"\U0001F600-\U0001F64F"  
-        u"\U0001F300-\U0001F5FF"  
-        u"\U0001F680-\U0001F6FF"  
-        u"\U0001F1E0-\U0001F1FF"  
-        u"\U00002702-\U000027B0"
-        u"\U000024C2-\U0001F251"
-        "]+", flags=re.UNICODE
-    )
-    return emoji_pattern.sub(r'', text)
-
-# Build the prompt for content generation based on updated columns and template examples
 # Build the prompt for content generation based on updated columns and template examples
 def build_template_prompt(sheet_row, examples_data):
     job_id = sheet_row['Job ID']  # Now from column C
@@ -142,25 +120,13 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    example_text = example_row['Example'].values[0]
+    # Adjust the column name if necessary after inspecting the columns
+    example_text = example_row['Example'].values[0]  # Assuming 'Example' is correct, adjust if needed
 
     prompt = f"Create content using the following description as the main focus:\n\n'{topic_description}'\n\n"
     prompt += f"Use the following template as guidance:\n\n{example_text}"
 
     return prompt, job_id
-
-# Generate content using OpenAI API
-def generate_content(prompt, job_id):
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)
-    return f"Job ID {job_id}: {content_clean}"
 
 # Main application function
 def main():
