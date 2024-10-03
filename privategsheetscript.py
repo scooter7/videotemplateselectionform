@@ -135,12 +135,14 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    # Dynamically build the prompt based on available fields in the template
+    # Dynamically build the prompt based on available fields in the template, inserting content from the Google Sheet
     prompt = f"{job_id}\n"
     for col in example_row.columns[1:]:
-        text_element = example_row[col].values[0]
-        if pd.notna(text_element):
-            prompt += f"{col}: {text_element}\n"
+        template_text = example_row[col].values[0]
+        google_sheet_text = sheet_row.get(col, '')  # Pull corresponding content from Google Sheet based on column name
+
+        if pd.notna(template_text) and google_sheet_text:
+            prompt += f"{col}: {google_sheet_text}\n"
 
     return prompt, job_id
 
