@@ -124,15 +124,16 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    # Initialize the prompt for the content generation (without any commentary)
-    prompt = f"{topic_description}\n\n"  # Only include the topic description as the start
-
+    # Initialize the prompt for the content generation
+    prompt = f"Create content using the following description:\n\n'{topic_description}'\n\n"
+    
     # Add each section based on the template rules, ensuring no extra commentary is included
     for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
+            # Label the section properly
             section_name = col  # Example: 'Text01-1'
-            prompt += f"{section_name}: {text_element}\n"
+            prompt += f"Section {section_name}: {text_element}\n"
 
     return prompt, job_id
 
@@ -142,13 +143,15 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template without adding commentary or extra explanations."},
                 {"role": "user", "content": prompt}
             ]
         )
         content = completion.choices[0].message.content.strip()
         content_clean = clean_text(content)
-        return f"Job ID {job_id}: {content_clean}"
+
+        # Ensure the content has clearly labeled sections and follows the structure defined in the prompt
+        return f"Job ID {job_id}:\n\n{content_clean}"
     except Exception as e:
         st.error(f"Error generating content: {e}")
         return None
