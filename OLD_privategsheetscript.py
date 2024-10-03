@@ -137,7 +137,7 @@ def build_template_prompt(sheet_row, examples_data):
     for col in example_row.columns[1:]:
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            prompt += f"{text_element}\n"
+            prompt += f"{col}: {text_element}\n"
 
     return prompt, job_id
 
@@ -198,7 +198,7 @@ def main():
                 continue
 
             generated_content = generate_content(prompt, job_id)
-            generated_contents.append(generated_content)
+            generated_contents.append(f"Job ID {job_id}:\n{generated_content}")
 
         full_content = "\n\n".join(generated_contents)
         st.session_state['full_content'] = full_content
