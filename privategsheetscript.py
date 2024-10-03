@@ -109,6 +109,7 @@ def clean_text(text):
     return emoji_pattern.sub(r'', text)
 
 # Build the prompt for content generation based on updated columns and template examples
+# Build the prompt for content generation based on updated columns and template examples
 def build_template_prompt(sheet_row, examples_data):
     job_id = sheet_row['Job ID']  # Now from column C
     selected_template = sheet_row['Selected-Template']  # Now from column G
@@ -120,21 +121,22 @@ def build_template_prompt(sheet_row, examples_data):
 
     # Check if the selected_template follows the expected format
     if "template_SH_" in selected_template:
-        # Extract template number from template_SH_XX
+        # Extract template number from template_SH_XX and format it to two digits
         try:
             template_number = int(selected_template.split('_')[-1])
+            template_number_str = f"{template_number:02d}"  # Ensure two digits
         except ValueError:
             st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
-            template_number = 1  # Default template number in case of failure
+            template_number_str = "01"  # Default template number in case of failure
     else:
         st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
-        template_number = 1  # Default template number in case of invalid format
+        template_number_str = "01"  # Default template number in case of invalid format
 
     # Verify the template data from the examples CSV
-    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number}']
+    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     # Debug: Show the template we are looking for
-    st.write(f"Looking for template_SH_{template_number} in examples.")
+    st.write(f"Looking for template_SH_{template_number_str} in examples.")
 
     if example_row.empty:
         st.error(f"No example found for template {selected_template}.")
