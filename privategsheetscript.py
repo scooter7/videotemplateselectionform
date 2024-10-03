@@ -135,6 +135,9 @@ def build_template_prompt(sheet_row, examples_data):
             section_name = col  # Example: 'Text01-1'
             prompt += f"Section {section_name}: {text_element}\n"
 
+    # Ensure sections are enforced for each template
+    prompt += "\nEnsure that the content strictly follows the structure and guidelines from the template, including all required sections and character limits."
+    
     return prompt, job_id
 
 # Generate content using OpenAI API
@@ -143,7 +146,7 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template without adding commentary or extra explanations."},
+                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template without adding commentary or extra explanations. Follow the template rules exactly, including character limits, section names, and theme text."},
                 {"role": "user", "content": prompt}
             ]
         )
