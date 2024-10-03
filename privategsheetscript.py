@@ -5,6 +5,9 @@ import openai
 from google.oauth2.service_account import Credentials
 import gspread
 
+# Access OpenAI API key from [openai] in secrets.toml
+openai.api_key = st.secrets["openai"]["openai_api_key"]
+
 client = openai
 
 # Hide Streamlit branding
@@ -144,7 +147,7 @@ def build_template_prompt(sheet_row, examples_data):
 
 # Generate content using OpenAI API
 def generate_content(prompt, job_id):
-    completion = client.chat.completions.create(
+    completion = client.ChatCompletion.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
