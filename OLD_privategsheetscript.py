@@ -131,9 +131,6 @@ def build_template_prompt(sheet_row, examples_data):
     # Verify the template data from the examples CSV
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
 
-    # Debug: Show the template we are looking for
-    st.write(f"Looking for template_SH_{template_number_str} in examples.")
-
     if example_row.empty:
         st.error(f"No example found for template {selected_template}.")
         return None, None
@@ -159,6 +156,26 @@ def generate_content(prompt, job_id):
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
     return f"Job ID {job_id}: {content_clean}"
+
+# Generate social media content based on the main content
+def generate_social_content(main_content, selected_channels):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
+        "linkedin": f"Generate a LinkedIn post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
+        "instagram": f"Generate an Instagram post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.instagram.com/shivehattery/."
+    }
+    generated_content = {}
+    for channel in selected_channels:
+        prompt = social_prompts[channel]
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        generated_content[channel] = clean_text(completion.choices[0].message.content.strip())
+    return generated_content
 
 # Main application function
 def main():
@@ -197,6 +214,36 @@ def main():
             file_name="generated_content.txt",
             mime="text/plain"
         )
+
+    st.markdown("---")
+    st.header("Generate Social Media Posts")
+    facebook = st.checkbox("Facebook")
+    linkedin = st.checkbox("LinkedIn")
+    instagram = st.checkbox("Instagram")
+
+    selected_channels = []
+    if facebook:
+        selected_channels.append("facebook")
+    if linkedin:
+        selected_channels.append("linkedin")
+    if instagram:
+        selected_channels.append("instagram")
+
+    # Ensure full_content exists before generating social media posts
+    if selected_channels and 'full_content' in st.session_state:
+        if st.button("Generate Social Media Content"):
+            st.session_state['social_content'] = generate_social_content(st.session_state['full_content'], selected_channels)
+
+    if 'social_content' in st.session_state:
+        for channel, content in st.session_state['social_content'].items():
+            st.subheader(f"{channel.capitalize()} Post")
+            st.text_area(f"{channel.capitalize()} Content", content, height=200)
+            st.download_button(
+                label=f"Download {channel.capitalize()} Content",
+                data=content,
+                file_name=f"{channel}_post.txt",
+                mime="text/plain"
+            )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
