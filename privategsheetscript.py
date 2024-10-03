@@ -111,24 +111,28 @@ def build_template_prompt(sheet_row, examples_data):
     if "template_SH_" in selected_template:
         try:
             template_number = int(selected_template.split('_')[-1])
-            template_number_str = f"{template_number:02d}"  # Ensure two digits
+            template_number_str = f"{template_number:02d}"  # Ensure two digits (01, 02, ..., 06)
         except ValueError:
-            template_number_str = "01"  # Fallback to default
+            template_number_str = "01"  # Fallback to default if parsing fails
     else:
         template_number_str = "01"  # Fallback to default
 
+    # Retrieve the correct row from the examples data corresponding to the template
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
+    # Initialize the prompt for the content generation
     prompt = f"Create content using the following description:\n\n'{topic_description}'\n\n"
     
-    for col in example_row.columns[1:]:
+    # Add each section based on the template rules
+    for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            prompt += f"{col}: {text_element}\n"
+            section_name = col  # Example: 'Text01-1'
+            prompt += f"{section_name}: {text_element}\n"
 
     return prompt, job_id
 
