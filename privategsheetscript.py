@@ -5,6 +5,8 @@ import openai
 from google.oauth2.service_account import Credentials
 import gspread
 
+client = openai
+
 # Hide Streamlit branding
 st.markdown(
     """
