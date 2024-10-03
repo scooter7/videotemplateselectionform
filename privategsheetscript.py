@@ -71,12 +71,18 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found. Please check the ID and sharing permissions.")
         return pd.DataFrame()  # Return an empty dataframe
 
-# Load examples CSV file from GitHub
+# Load examples CSV file from GitHub with debug info
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
-    examples = pd.read_csv(url)
-    return examples
+    try:
+        examples = pd.read_csv(url)
+        st.write("Examples CSV loaded successfully.")
+        st.dataframe(examples)  # Display the loaded examples for debugging
+        return examples
+    except Exception as e:
+        st.error(f"Error loading examples CSV: {e}")
+        return pd.DataFrame()
 
 # Use the correct Spreadsheet ID
 sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
@@ -124,8 +130,12 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
         template_number = 1  # Default template number in case of invalid format
 
-    # Get the example template from the examples CSV
+    # Verify the template data from the examples CSV
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number}']
+    
+    # Debug: Show the template we are looking for
+    st.write(f"Looking for template_SH_{template_number} in examples.")
+
     if example_row.empty:
         st.error(f"No example found for template {selected_template}.")
         return None, None
