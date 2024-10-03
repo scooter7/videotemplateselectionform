@@ -136,11 +136,11 @@ def build_template_prompt(sheet_row, examples_data):
         return None, None
 
     # Dynamically build the prompt based on available fields in the template
-    prompt = f"Create content using the following description as the main focus:\n\n'{topic_description}'\n\n"
+    prompt = f"'{topic_description}'\n\n"
     for col in example_row.columns[1:]:
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            prompt += f"{col}: {text_element}\n"
+            prompt += f"{text_element}\n"
 
     return prompt, job_id
 
@@ -155,7 +155,7 @@ def generate_content(prompt, job_id):
     )
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
-    return f"Job ID {job_id}: {content_clean}"
+    return content_clean  # No commentary, only the generated copy
 
 # Generate social media content based on the main content
 def generate_social_content(main_content, selected_channels):
