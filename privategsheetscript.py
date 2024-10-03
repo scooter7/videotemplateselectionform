@@ -71,8 +71,16 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found. Please check the ID and sharing permissions.")
         return pd.DataFrame()  # Return an empty dataframe
 
+# Load examples CSV file from GitHub
+@st.cache_data
+def load_examples():
+    url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
+    examples = pd.read_csv(url)
+    return examples
+
 # Use the correct Spreadsheet ID
 sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+examples_data = load_examples()
 
 # Access OpenAI API key from [openai] in secrets.toml
 openai.api_key = st.secrets["openai"]["openai_api_key"]
@@ -94,8 +102,8 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Build the prompt for content generation based on updated columns
-def build_template_prompt(sheet_row):
+# Build the prompt for content generation based on updated columns and template examples
+def build_template_prompt(sheet_row, examples_data):
     job_id = sheet_row['Job ID']  # Now from column C
     selected_template = sheet_row['Selected-Template']  # Now from column G
     topic_description = sheet_row['Topic-Description']  # Now from column H
@@ -116,8 +124,16 @@ def build_template_prompt(sheet_row):
         st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
         template_number = 1  # Default template number in case of invalid format
 
+    # Get the example template from the examples CSV
+    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number}']
+    if example_row.empty:
+        st.error(f"No example found for template {selected_template}.")
+        return None, None
+
+    example_text = example_row['Example'].values[0]
+
     prompt = f"Create content using the following description as the main focus:\n\n'{topic_description}'\n\n"
-    prompt += f"Use template {template_number} for guidance.\n"
+    prompt += f"Use the following template as guidance:\n\n{example_text}"
 
     return prompt, job_id
 
@@ -148,7 +164,7 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            prompt, job_id = build_template_prompt(row)
+            prompt, job_id = build_template_prompt(row, examples_data)
 
             # Skip rows where prompt or job_id is None (i.e., when required fields are missing)
             if not prompt or not job_id:
