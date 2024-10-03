@@ -121,6 +121,19 @@ def build_template_prompt(sheet_row):
 
     return prompt, job_id
 
+# Generate content using OpenAI API
+def generate_content(prompt, job_id):
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    content = completion.choices[0].message.content.strip()
+    content_clean = clean_text(content)
+    return f"Job ID {job_id}: {content_clean}"
+
 # Main application function
 def main():
     st.title("AI Script Generator from Google Sheets")
