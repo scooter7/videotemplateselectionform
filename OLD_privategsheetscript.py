@@ -82,9 +82,6 @@ def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
     try:
         examples = pd.read_csv(url)
-        st.write("Examples CSV loaded successfully.")
-        st.dataframe(examples)  # Display the loaded examples for debugging
-        st.write("Column names in the examples CSV:", examples.columns.tolist())  # Debug: Print column names
         return examples
     except Exception as e:
         st.error(f"Error loading examples CSV: {e}")
@@ -136,7 +133,7 @@ def build_template_prompt(sheet_row, examples_data):
         return None, None
 
     # Dynamically build the prompt based on available fields in the template
-    prompt = f"'{topic_description}'\n\n"
+    prompt = f"Topic: '{topic_description}'\n\n"
     for col in example_row.columns[1:]:
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
@@ -154,8 +151,7 @@ def generate_content(prompt, job_id):
         ]
     )
     content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)
-    return content_clean  # No commentary, only the generated copy
+    return clean_text(content)
 
 # Generate social media content based on the main content
 def generate_social_content(main_content, selected_channels):
