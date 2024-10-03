@@ -142,7 +142,7 @@ def build_template_prompt(sheet_row, examples_data):
 
 # Generate content using OpenAI API
 def generate_content(prompt, job_id):
-    completion = openai.ChatCompletion.create(
+    completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
