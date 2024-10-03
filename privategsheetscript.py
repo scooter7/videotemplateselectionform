@@ -94,19 +94,22 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Build the prompt for content generation
+# Build the prompt for content generation based on updated columns
 def build_template_prompt(sheet_row):
-    job_number = sheet_row['Job Number']
-    template_number = sheet_row['Template']
-    description = sheet_row['Description']
+    job_id = sheet_row['Job ID']  # Now from column C
+    selected_template = sheet_row['Selected-Template']  # Now from column G
+    topic_description = sheet_row['Topic-Description']  # Now from column H
 
-    prompt = f"Create content using the following description as the main focus:\n\n'{description}'\n\n"
-    prompt += f"Use the following template number for guidance: {template_number}\n"
+    # Extract template number from template_SH_XX
+    template_number = int(selected_template.split('_')[-1])
 
-    return prompt, job_number
+    prompt = f"Create content using the following description as the main focus:\n\n'{topic_description}'\n\n"
+    prompt += f"Use template {template_number} for guidance.\n"
+
+    return prompt, job_id
 
 # Generate content using OpenAI API
-def generate_content(prompt, job_number):
+def generate_content(prompt, job_id):
     completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -116,7 +119,7 @@ def generate_content(prompt, job_number):
     )
     content = completion.choices[0].message.content.strip()
     content_clean = clean_text(content)
-    return f"Job Number {job_number}: {content_clean}"
+    return f"Job ID {job_id}: {content_clean}"
 
 # Main application function
 def main():
@@ -132,8 +135,8 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            prompt, job_number = build_template_prompt(row)
-            generated_content = generate_content(prompt, job_number)
+            prompt, job_id = build_template_prompt(row)
+            generated_content = generate_content(prompt, job_id)
             generated_contents.append(generated_content)
 
         full_content = "\n\n".join(generated_contents)
