@@ -124,19 +124,19 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    # Initialize the prompt for the content generation
-    prompt = f"Create content using the following description:\n\n'{topic_description}'\n\n"
+    # Initialize the prompt for the content generation, adding strict instructions for each section
+    prompt = f"Create content using the following description for Job ID {job_id}:\n\n'{topic_description}'\n\n"
     
-    # Add each section based on the template rules, ensuring no extra commentary is included
+    # Add each section based on the template rules from the CSV and strictly apply those rules
     for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            # Label the section properly
+            # Ensure we are applying the template rules exactly as required, including character limits
             section_name = col  # Example: 'Text01-1'
-            prompt += f"Section {section_name}: {text_element}\n"
+            prompt += f"Section {section_name}: {text_element} (Enforce the template rules strictly, follow section naming and length restrictions).\n"
 
-    # Ensure sections are enforced for each template
-    prompt += "\nEnsure that the content strictly follows the structure and guidelines from the template, including all required sections and character limits."
+    # Final instruction to make sure the model follows each section's rules and doesn't skip any
+    prompt += "\nFollow the exact structure of the template and include every section from the CSV. Do not skip any sections, and ensure the content aligns with the character limits and section names."
     
     return prompt, job_id
 
