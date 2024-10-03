@@ -2,19 +2,29 @@ import streamlit as st
 import pandas as pd
 import re
 import openai
-from streamlit_gsheets import GSheetsConnection
+from google.oauth2.service_account import Credentials
+import gspread
+
+# Access OpenAI API key from [openai] in secrets.toml
+openai.api_key = st.secrets["openai"]["openai_api_key"]
+
+client = openai
 
 # Hide Streamlit branding
-st.markdown("""
+st.markdown(
+    """
     <style>
     .st-emotion-cache-12fmjuu.ezrtsby2 {
         display: none;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
 # Custom CSS for the UI elements
-st.markdown("""
+st.markdown(
+    """
     <style>
     .logo-container {
         display: flex;
@@ -43,21 +53,37 @@ st.markdown("""
         color: #fec923;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-st.markdown("""
-    <div class="logo-container">
-        <img src="https://mir-s3-cdn-cf.behance.net/project_modules/1400/da17b078065083.5cadb8dec2e85.png" alt="Logo">
-    </div>
-    """, unsafe_allow_html=True)
+# Load Google Sheet data
+@st.cache_data
+def load_google_sheet(sheet_id):
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    try:
+        sheet = gc.open_by_key(sheet_id).sheet1
+        data = pd.DataFrame(sheet.get_all_records())
+        return data
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+        return pd.DataFrame()
 
-st.markdown('<div class="app-container">', unsafe_allow_html=True)
+# Load examples CSV file from GitHub
+@st.cache_data
+def load_examples():
+    url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
+    try:
+        examples = pd.read_csv(url)
+        return examples
+    except Exception as e:
+        st.error(f"Error loading examples CSV: {e}")
+        return pd.DataFrame()
 
-openai.api_key = st.secrets["openai_api_key"]
-
-client = openai
-
-# Clean up text
+# Text cleaning function
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -72,65 +98,43 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-@st.cache_data
-def load_template_data():
-    url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
-    df = pd.read_csv(url)
-    return df
+# Build the prompt for content generation based on the Google Sheets row and template examples
+def build_template_prompt(sheet_row, examples_data):
+    job_id = sheet_row['Job ID']  # Extracting job ID
+    selected_template = sheet_row['Selected-Template']  # Extracting template
+    topic_description = sheet_row['Topic-Description']  # Extracting topic description
 
-template_data = load_template_data()
+    if not (job_id and selected_template and topic_description):
+        return None, None
 
-@st.cache_data
-def load_google_sheet():
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read()
-    return df
+    # Extract the template number
+    if "template_SH_" in selected_template:
+        try:
+            template_number = int(selected_template.split('_')[-1])
+            template_number_str = f"{template_number:02d}"  # Ensure two digits
+        except ValueError:
+            template_number_str = "01"  # Fallback to default
+    else:
+        template_number_str = "01"  # Fallback to default
 
-sheet_data = load_google_sheet()
-
-# Build the template prompt based on Google Sheet row and CSV template guidance
-def build_template_prompt(sheet_row, template_data):
-    job_number = sheet_row['Job Number']
-    template_number = sheet_row['Template']
-    description = sheet_row['Description']
+    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
-    template_data['Template'] = template_data['Template'].str.strip().str.lower()
-    template_filter = f"template {template_number}".lower()
-    template_row = template_data[template_data['Template'] == template_filter]
+    if example_row.empty:
+        st.error(f"No example found for template {selected_template}.")
+        return None, None
+
+    prompt = f"Create content using the following description:\n\n'{topic_description}'\n\n"
     
-    prompt = f"{description}\n\n"
-    
-    # Loop through all columns in the template (excluding the template identifier)
-    for col in template_row.columns[2:]:
-        text_element = template_row[col].values[0]
+    for col in example_row.columns[1:]:
+        text_element = example_row[col].values[0]
         if pd.notna(text_element):
             prompt += f"{col}: {text_element}\n"
-    
-    return prompt, job_number
 
-# Generate content based on the prompt and job number
-def generate_content(prompt, job_number):
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)
-    return f"Job Number {job_number}: {content_clean}"
+    return prompt, job_id
 
-# Generate social media content based on the main content
-def generate_social_content(main_content, selected_channels):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.facebook.com/ShiveHattery.",
-        "linkedin": f"Generate a LinkedIn post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.linkedin.com/company/shive-hattery/.",
-        "instagram": f"Generate an Instagram post based on the following content:\n{main_content}\nUse a tone similar to the posts on https://www.instagram.com/shivehattery/."
-    }
-    generated_content = {}
-    for channel in selected_channels:
-        prompt = social_prompts[channel]
+# Generate content using OpenAI API
+def generate_content(prompt, job_id):
+    try:
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -138,28 +142,65 @@ def generate_social_content(main_content, selected_channels):
                 {"role": "user", "content": prompt}
             ]
         )
-        generated_content[channel] = clean_text(completion.choices[0].message.content.strip())
+        content = completion.choices[0].message.content.strip()
+        content_clean = clean_text(content)
+        return f"Job ID {job_id}: {content_clean}"
+    except Exception as e:
+        st.error(f"Error generating content: {e}")
+        return None
+
+# Generate social media content
+def generate_social_content(main_content, selected_channels):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
+        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
+        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
+    }
+    generated_content = {}
+    for channel in selected_channels:
+        try:
+            prompt = social_prompts[channel]
+            completion = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            generated_content[channel] = clean_text(completion.choices[0].message.content.strip())
+        except Exception as e:
+            st.error(f"Error generating {channel} content: {e}")
     return generated_content
 
+# Main application function
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    if sheet_data.empty or template_data.empty:
+    # Load the data from Google Sheets and the examples CSV
+    sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+    examples_data = load_examples()
+
+    if sheet_data.empty or examples_data.empty:
         st.error("No data available from Google Sheets or Templates CSV.")
         return
 
     st.dataframe(sheet_data)
 
-    if st.button("Generate Content from Google Sheets and Templates"):
+    if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            prompt, job_number = build_template_prompt(row, template_data)
-            generated_content = generate_content(prompt, job_number)
-            generated_contents.append(generated_content)
-        
+            prompt, job_id = build_template_prompt(row, examples_data)
+
+            if not prompt or not job_id:
+                continue
+
+            generated_content = generate_content(prompt, job_id)
+            if generated_content:
+                generated_contents.append(generated_content)
+
         full_content = "\n\n".join(generated_contents)
-        st.session_state['full_content'] = full_content  # Store generated content in session state
+        st.session_state['full_content'] = full_content
         st.text_area("Generated Content", full_content, height=300)
 
         st.download_button(
@@ -183,10 +224,10 @@ def main():
     if instagram:
         selected_channels.append("instagram")
 
-    # Ensure full_content exists before generating social media posts
     if selected_channels and 'full_content' in st.session_state:
         if st.button("Generate Social Media Content"):
-            st.session_state['social_content'] = generate_social_content(st.session_state['full_content'], selected_channels)
+            social_content = generate_social_content(st.session_state['full_content'], selected_channels)
+            st.session_state['social_content'] = social_content
 
     if 'social_content' in st.session_state:
         for channel, content in st.session_state['social_content'].items():
