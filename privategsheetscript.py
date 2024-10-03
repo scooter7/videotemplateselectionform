@@ -100,26 +100,26 @@ def build_template_prompt(sheet_row):
     selected_template = sheet_row['Selected-Template']  # Now from column G
     topic_description = sheet_row['Topic-Description']  # Now from column H
 
-    # Extract template number from template_SH_XX
-    template_number = int(selected_template.split('_')[-1])
+    # Check if all required fields are non-empty
+    if not (job_id and selected_template and topic_description):
+        return None, None
+
+    # Check if the selected_template follows the expected format
+    if "template_SH_" in selected_template:
+        # Extract template number from template_SH_XX
+        try:
+            template_number = int(selected_template.split('_')[-1])
+        except ValueError:
+            st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
+            template_number = 1  # Default template number in case of failure
+    else:
+        st.error(f"Invalid template format for Job ID {job_id}. Using default template.")
+        template_number = 1  # Default template number in case of invalid format
 
     prompt = f"Create content using the following description as the main focus:\n\n'{topic_description}'\n\n"
     prompt += f"Use template {template_number} for guidance.\n"
 
     return prompt, job_id
-
-# Generate content using OpenAI API
-def generate_content(prompt, job_id):
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    content = completion.choices[0].message.content.strip()
-    content_clean = clean_text(content)
-    return f"Job ID {job_id}: {content_clean}"
 
 # Main application function
 def main():
@@ -136,6 +136,11 @@ def main():
         generated_contents = []
         for idx, row in sheet_data.iterrows():
             prompt, job_id = build_template_prompt(row)
+
+            # Skip rows where prompt or job_id is None (i.e., when required fields are missing)
+            if not prompt or not job_id:
+                continue
+
             generated_content = generate_content(prompt, job_id)
             generated_contents.append(generated_content)
 
