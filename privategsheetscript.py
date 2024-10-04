@@ -124,10 +124,18 @@ def build_template_prompt(sheet_row, template_structure):
         return None, None
 
     prompt = f"Create content using the following description for Job ID {job_id}:\n\n'{topic_description}'\n\n"
-    
+
+    umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-        prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section. Please keep the content within {max_chars} characters.\n"
+        
+        if '-' not in section_name:
+            umbrella_sections[section_name] = content
+            prompt += f"Section {section_name}: Use the description '{topic_description}' for this umbrella section. Please keep it within {max_chars} characters.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"Section {section_name}: Break down the text '{umbrella_sections[umbrella_key]}' for this subsection. Please keep it within {max_chars} characters.\n"
 
     prompt += "\nStrictly follow the section names and ensure every section adheres to the structure and character limits from the CSV template."
     
