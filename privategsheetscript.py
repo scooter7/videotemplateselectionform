@@ -5,12 +5,10 @@ import openai
 from google.oauth2.service_account import Credentials
 import gspread
 
-# Access OpenAI API key from [openai] in secrets.toml
 openai.api_key = st.secrets["openai"]["openai_api_key"]
 
 client = openai
 
-# Hide Streamlit branding
 st.markdown(
     """
     <style>
@@ -22,7 +20,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Custom CSS for the UI elements
 st.markdown(
     """
     <style>
@@ -57,7 +54,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Load Google Sheet data
 @st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -72,7 +68,6 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame()
 
-# Load examples CSV file from GitHub
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -83,7 +78,6 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
-# Text cleaning function
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -98,56 +92,52 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Build the prompt for content generation based on the Google Sheets row and template examples
-def build_template_prompt(sheet_row, examples_data):
-    job_id = sheet_row['Job ID']  # Extracting job ID
-    selected_template = sheet_row['Selected-Template']  # Extracting template
-    topic_description = sheet_row['Topic-Description']  # Extracting topic description
-
-    if not (job_id and selected_template and topic_description):
-        return None, None
-
-    # Extract the template number
+def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
             template_number = int(selected_template.split('_')[-1])
-            template_number_str = f"{template_number:02d}"  # Ensure two digits (01, 02, ..., 06)
+            template_number_str = f"{template_number:02d}"
         except ValueError:
-            template_number_str = "01"  # Fallback to default if parsing fails
+            template_number_str = "01"
     else:
-        template_number_str = "01"  # Fallback to default
+        template_number_str = "01"
 
-    # Retrieve the correct row from the examples data corresponding to the template
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
-        st.error(f"No example found for template {selected_template}.")
-        return None, None
+        return None
 
-    # Initialize the prompt for the content generation, using the Google Sheet description as the content focus
-    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n'{topic_description}'\n\n"
-    
-    # Add each section based on the template rules from the CSV, including character limits
-    for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
+    template_structure = []
+    for col in example_row.columns[1:]:
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            # Ensure we are applying the template rules exactly as required, including character limits
-            section_name = col  # Example: 'Text01-1'
-            max_chars = 100  # Replace with actual character limit from the CSV if available
-            prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section. Please keep the content within {max_chars} characters.\n"
+            section_name = col
+            template_structure.append((section_name, text_element))
 
-    # Final instruction to ensure the model prioritizes the Google Sheet description and adheres to character limits
-    prompt += "\nStrictly follow the section names and ensure every section adheres to the character limits from the CSV template. Do not exceed the character limits."
+    return template_structure
+
+def build_template_prompt(sheet_row, template_structure):
+    job_id = sheet_row['Job ID']
+    topic_description = sheet_row['Topic-Description']
+
+    if not (job_id and topic_description and template_structure):
+        return None, None
+
+    prompt = f"Create content using the following description for Job ID {job_id}:\n\n'{topic_description}'\n\n"
+    
+    for section_name, content in template_structure:
+        max_chars = len(content)
+        prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section. Please keep the content within {max_chars} characters.\n"
+
+    prompt += "\nStrictly follow the section names and ensure every section adheres to the structure and character limits from the CSV template."
     
     return prompt, job_id
 
-# Function to validate and enforce character limits
 def enforce_character_limit(content, max_chars):
     if len(content) > max_chars:
-        return content[:max_chars].rstrip() + "..."  # Truncate and add ellipsis if necessary
+        return content[:max_chars].rstrip() + "..."
     return content
 
-# Generate content using OpenAI API
 def generate_content(prompt, job_id):
     try:
         completion = client.chat.completions.create(
@@ -160,15 +150,11 @@ def generate_content(prompt, job_id):
         content = completion.choices[0].message.content.strip()
         content_clean = clean_text(content)
 
-        # Apply character limits to each section (example: 100 characters, adjust per section)
-        content_clean = enforce_character_limit(content_clean, 100)  # Example limit of 100 chars for each section
-        
         return f"Job ID {job_id}:\n\n{content_clean}"
     except Exception as e:
         st.error(f"Error generating content: {e}")
         return None
 
-# Generate social media content
 def generate_social_content(main_content, selected_channels):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
@@ -191,12 +177,10 @@ def generate_social_content(main_content, selected_channels):
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
 
-# Main application function
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    # Load the data from Google Sheets and the examples CSV
     sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     examples_data = load_examples()
 
@@ -209,7 +193,10 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            prompt, job_id = build_template_prompt(row, examples_data)
+            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
+            if template_structure is None:
+                continue
+            prompt, job_id = build_template_prompt(row, template_structure)
 
             if not prompt or not job_id:
                 continue
