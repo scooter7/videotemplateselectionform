@@ -193,6 +193,9 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
+            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
+                continue
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
                 continue
