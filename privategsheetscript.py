@@ -124,19 +124,16 @@ def build_template_prompt(sheet_row, examples_data):
         st.error(f"No example found for template {selected_template}.")
         return None, None
 
-    # Initialize the prompt for the content generation, adding strict instructions for each section
-    prompt = f"Create content using the following description for Job ID {job_id}:\n\n'{topic_description}'\n\n"
+    # Initialize the prompt for the content generation, using the Google Sheet description as the content focus
+    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n'{topic_description}'\n\n"
     
-    # Add each section based on the template rules from the CSV and strictly apply those rules
+    # Add each section based on the template rules from the CSV, but instruct the model to use the topic_description for content
     for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
-        text_element = example_row[col].values[0]
-        if pd.notna(text_element):
-            # Ensure we are applying the template rules exactly as required, including character limits
-            section_name = col  # Example: 'Text01-1'
-            prompt += f"Section {section_name}: {text_element} (Strictly follow the CSV guidelines for this section).\n"
+        section_name = col  # Example: 'Text01-1'
+        prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section, following the structural guidance from the CSV.\n"
 
-    # Final instruction to make sure the model follows each section's rules and doesn't skip any
-    prompt += "\nStrictly follow the section names and ensure every section is included according to the CSV template. Do not combine sections or skip any parts."
+    # Final instruction to ensure the model prioritizes the Google Sheet description over the CSV content
+    prompt += "\nEnsure the content is driven by the Google Sheet description and structured based on the CSV guidelines. Do not pull content directly from the CSV."
     
     return prompt, job_id
 
@@ -146,7 +143,7 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template without adding commentary or extra explanations. Follow the template rules exactly, including character limits, section names, and theme text."},
+                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template while prioritizing the Google Sheet description. Follow the structure from the CSV, but use the description to create the content."},
                 {"role": "user", "content": prompt}
             ]
         )
