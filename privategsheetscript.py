@@ -127,15 +127,25 @@ def build_template_prompt(sheet_row, examples_data):
     # Initialize the prompt for the content generation, using the Google Sheet description as the content focus
     prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n'{topic_description}'\n\n"
     
-    # Add each section based on the template rules from the CSV, but instruct the model to use the topic_description for content
+    # Add each section based on the template rules from the CSV, including character limits
     for col in example_row.columns[1:]:  # Skip the 'Template' column, focus on the sections
-        section_name = col  # Example: 'Text01-1'
-        prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section, following the structural guidance from the CSV.\n"
+        text_element = example_row[col].values[0]
+        if pd.notna(text_element):
+            # Ensure we are applying the template rules exactly as required, including character limits
+            section_name = col  # Example: 'Text01-1'
+            max_chars = 100  # Replace with actual character limit from the CSV if available
+            prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section. Please keep the content within {max_chars} characters.\n"
 
-    # Final instruction to ensure the model prioritizes the Google Sheet description over the CSV content
-    prompt += "\nEnsure the content is driven by the Google Sheet description and structured based on the CSV guidelines. Do not pull content directly from the CSV."
+    # Final instruction to ensure the model prioritizes the Google Sheet description and adheres to character limits
+    prompt += "\nStrictly follow the section names and ensure every section adheres to the character limits from the CSV template. Do not exceed the character limits."
     
     return prompt, job_id
+
+# Function to validate and enforce character limits
+def enforce_character_limit(content, max_chars):
+    if len(content) > max_chars:
+        return content[:max_chars].rstrip() + "..."  # Truncate and add ellipsis if necessary
+    return content
 
 # Generate content using OpenAI API
 def generate_content(prompt, job_id):
@@ -143,14 +153,16 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template while prioritizing the Google Sheet description. Follow the structure from the CSV, but use the description to create the content."},
+                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template and character limits. Follow the structure from the CSV and use the description to create the content."},
                 {"role": "user", "content": prompt}
             ]
         )
         content = completion.choices[0].message.content.strip()
         content_clean = clean_text(content)
 
-        # Ensure the content has clearly labeled sections and follows the structure defined in the prompt
+        # Apply character limits to each section (example: 100 characters, adjust per section)
+        content_clean = enforce_character_limit(content_clean, 100)  # Example limit of 100 chars for each section
+        
         return f"Job ID {job_id}:\n\n{content_clean}"
     except Exception as e:
         st.error(f"Error generating content: {e}")
