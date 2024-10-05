@@ -54,7 +54,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# List of all possible template columns that might appear in the CSV file
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
     "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
@@ -123,7 +122,6 @@ def extract_template_structure(selected_template, examples_data):
         return None
 
     template_structure = []
-    # Dynamically include all possible columns that might be used for the template
     for col in possible_columns:
         if col in example_row.columns:
             text_element = example_row[col].values[0]
@@ -139,7 +137,7 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n'{topic_description}'\n\n"
+    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -147,14 +145,14 @@ def build_template_prompt(sheet_row, template_structure):
         
         if '-' not in section_name:
             umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section, adhering to the structure of '{content}'. Limit to {max_chars} characters.\n"
+            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows: '{content}'. Limit to {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
 
-    prompt += "\nStrictly follow the section names and structure from the CSV template. Use the Google Sheet description to drive the content, but adhere to the structural breakdown defined in the CSV for subsections."
-    
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated including CTA-Text and other specific sections."
+
     return prompt, job_id
 
 def enforce_character_limit(content, max_chars):
@@ -167,7 +165,7 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that strictly follows the template structure from the CSV file, using the description from the Google Sheet to drive the content."},
+                {"role": "system", "content": "You are a helpful assistant that strictly follows the template structure from the CSV file, using the description from the Google Sheet to generate content."},
                 {"role": "user", "content": prompt}
             ]
         )
