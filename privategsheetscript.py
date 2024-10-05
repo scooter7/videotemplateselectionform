@@ -151,7 +151,11 @@ def build_template_prompt(sheet_row, template_structure):
             if umbrella_key in umbrella_sections:
                 prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
 
-    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated including CTA-Text and other specific sections."
+    # Add CTA-Text explicitly if it exists
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
 
     return prompt, job_id
 
