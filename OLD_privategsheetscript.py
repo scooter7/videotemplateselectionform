@@ -54,6 +54,20 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+possible_columns = [
+    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
+    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
+    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
+    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
+    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
+    "Text06", "Text06-1", "Text06-2", "Text06-3", "Text06-4", "06BG-Theme-Text",
+    "Text07", "Text07-1", "Text07-2", "Text07-3", "Text07-4", "07BG-Theme-Text",
+    "Text08", "Text08-1", "Text08-2", "Text08-3", "Text08-4", "08BG-Theme-Text",
+    "Text09", "Text09-1", "Text09-2", "Text09-3", "Text09-4", "09BG-Theme-Text",
+    "Text10", "Text10-1", "Text10-2", "Text10-3", "Text10-4", "10BG-Theme-Text",
+    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
+]
+
 @st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -108,11 +122,11 @@ def extract_template_structure(selected_template, examples_data):
         return None
 
     template_structure = []
-    for col in example_row.columns[1:]:
-        text_element = example_row[col].values[0]
-        if pd.notna(text_element):
-            section_name = col
-            template_structure.append((section_name, text_element))
+    for col in possible_columns:
+        if col in example_row.columns:
+            text_element = example_row[col].values[0]
+            if pd.notna(text_element):
+                template_structure.append((col, text_element))
 
     return template_structure
 
@@ -123,7 +137,7 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n'{topic_description}'\n\n"
+    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -131,14 +145,18 @@ def build_template_prompt(sheet_row, template_structure):
         
         if '-' not in section_name:
             umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section, adhering to the structure of '{content}'. Limit to {max_chars} characters.\n"
+            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows: '{content}'. Limit to {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
 
-    prompt += "\nStrictly follow the section names and structure from the CSV template. Use the Google Sheet description to drive the content, but adhere to the structural breakdown defined in the CSV for subsections."
-    
+    # Add CTA-Text explicitly if it exists
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
+
     return prompt, job_id
 
 def enforce_character_limit(content, max_chars):
@@ -151,7 +169,7 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that strictly follows the template structure from the CSV file, using the description from the Google Sheet to drive the content."},
+                {"role": "system", "content": "You are a helpful assistant that strictly follows the template structure from the CSV file, using the description from the Google Sheet to generate content."},
                 {"role": "user", "content": prompt}
             ]
         )
