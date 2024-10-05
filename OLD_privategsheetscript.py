@@ -123,13 +123,21 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Create content using the following description for Job ID {job_id}:\n\n'{topic_description}'\n\n"
-    
+    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n'{topic_description}'\n\n"
+
+    umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-        prompt += f"Section {section_name}: Use the description '{topic_description}' to create content for this section. Please keep the content within {max_chars} characters.\n"
+        
+        if '-' not in section_name:
+            umbrella_sections[section_name] = content
+            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section, adhering to the structure of '{content}'. Limit to {max_chars} characters.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows: '{content}'. Limit to {max_chars} characters.\n"
 
-    prompt += "\nStrictly follow the section names and ensure every section adheres to the structure and character limits from the CSV template."
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Use the Google Sheet description to drive the content, but adhere to the structural breakdown defined in the CSV for subsections."
     
     return prompt, job_id
 
@@ -143,7 +151,7 @@ def generate_content(prompt, job_id):
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that adheres strictly to the provided template and character limits. Follow the structure from the CSV and use the description to create the content."},
+                {"role": "system", "content": "You are a helpful assistant that strictly follows the template structure from the CSV file, using the description from the Google Sheet to drive the content."},
                 {"role": "user", "content": prompt}
             ]
         )
