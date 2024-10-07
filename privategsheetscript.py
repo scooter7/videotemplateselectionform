@@ -131,11 +131,11 @@ def extract_template_structure(selected_template, examples_data):
     return template_structure
 
 def build_section_prompt(section_name, content, max_chars, umbrella_sections, topic_description):
-    if umbrella_sections and section_name in umbrella_sections:
+    if section_name in umbrella_sections:
         umbrella_content = umbrella_sections[section_name]
-        prompt = f"Section {section_name}: Break down the umbrella section '{umbrella_content}' using the following description:\n\n{topic_description}\n\nLimit content to {max_chars} characters."
+        prompt = f"Create content for section '{section_name}' as part of the umbrella section '{umbrella_content}'. Focus only on the relevant details from the description:\n\n{topic_description}\n\nLimit the content to {max_chars} characters."
     else:
-        prompt = f"Section {section_name}: Use the following description to generate content:\n\n{topic_description}\n\nLimit content to {max_chars} characters."
+        prompt = f"Create content for section '{section_name}' using the description:\n\n{topic_description}\n\nLimit the content to {max_chars} characters."
     
     return prompt
 
