@@ -161,14 +161,14 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
-        # Use the format that worked for Anthropic
+        # Use the correct method to handle the message object returned
         message = client.messages.create(
             model="claude-3-5-sonnet-20240620",  # Use the Claude model
             max_tokens=1000,
             temperature=0.7,
             messages=[{"role": "user", "content": prompt}]
         )
-        content = message['completion'].strip()  # Extract content
+        content = message.completion.strip()  # Access the correct attribute
         content_clean = clean_text(content)
 
         return f"Job ID {job_id}:\n\n{content_clean}"
@@ -192,7 +192,7 @@ def generate_social_content(main_content, selected_channels):
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
-            generated_content[channel] = clean_text(message['completion'].strip())
+            generated_content[channel] = clean_text(message.completion.strip())
         except Exception as e:
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
