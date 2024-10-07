@@ -141,14 +141,12 @@ def build_template_prompt(sheet_row, template_structure):
     prompt += "Follow this structure, but do NOT use the CSV content verbatim. Instead, generate content based on the description, keeping each section within the specified character limits:\n\n"
     
     for section_name, content in template_structure:
-        # Use default character limit if needed
-        max_chars = 150  # Default limit
+        max_chars = 150  # Default character limit for all sections
         prompt += f"Section {section_name}: Generate content based on the description. Limit to {max_chars} characters.\n"
 
     return prompt, job_id
 
 def enforce_character_limit(content, max_chars):
-    max_chars = int(max_chars)
     if len(content) > max_chars:
         return content[:max_chars].rstrip() + "..."
     return content
@@ -158,8 +156,8 @@ def generate_content(prompt, job_id, template_structure, sheet_row):
         structured_prompt = f"Create content for Job ID {job_id}. Follow the structure from the template but generate content only based on the Google Sheet description. Do NOT use the CSV content. Keep each section within the character limits specified."
         structured_prompt += "\n\nHere are the sections and character limits:\n"
 
-        for section_name, max_chars in template_structure:
-            max_chars = 150  # Default limit for each section
+        for section_name, _ in template_structure:
+            max_chars = 150  # Default limit for all sections
             structured_prompt += f"Section {section_name}: Please generate content for this section. Limit: {max_chars} characters.\n"
         
         structured_prompt += f"\n\nGoogle Sheet description for this job: {sheet_row['Topic-Description']}"
@@ -177,9 +175,9 @@ def generate_content(prompt, job_id, template_structure, sheet_row):
             content = message.content[0].text.strip()
 
             structured_content = []
-            for section_name, max_chars in template_structure:
+            for section_name, _ in template_structure:
                 section_content = f"Section {section_name}: {content}"
-                truncated_content = enforce_character_limit(section_content, max_chars)
+                truncated_content = enforce_character_limit(section_content, 150)
                 structured_content.append(truncated_content)
 
             final_output = "\n\n".join(structured_content)
