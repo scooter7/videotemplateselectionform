@@ -132,7 +132,10 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Create content using only the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
+    prompt = f"You are tasked with generating content for Job ID {job_id} using the provided description. Please follow the section structure exactly as listed, but only use the Google Sheet description to generate the content, even if the description doesn't perfectly match the section names.\n\n"
+    
+    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
+    prompt += "Generate content for the following sections based on the description, even if there seems to be no direct match:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -140,17 +143,17 @@ def build_template_prompt(sheet_row, template_structure):
         
         if '-' not in section_name:
             umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Generate content only using the description. Ignore any mismatch in structure. Limit to {max_chars} characters.\n"
+            prompt += f"Section {section_name}: Please generate content. Keep it under {max_chars} characters. Use your creativity if necessary.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Generate content only using the description. Limit to {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Please expand on the umbrella section '{umbrella_sections[umbrella_key]}'. Keep it under {max_chars} characters.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
+        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
-    prompt += "\nStrictly follow the section names and structure from the CSV template, but generate content using only the provided description from the Google Sheet, even if there is a mismatch."
+    prompt += "\nDo not reject this task due to mismatches between the description and the section names. If there is no direct match, use your best judgment to generate appropriate content."
 
     return prompt, job_id
 
