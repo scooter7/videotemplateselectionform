@@ -168,9 +168,12 @@ def generate_content(prompt, job_id):
             temperature=0.7,
             messages=[{"role": "user", "content": prompt}]
         )
-        
-        # Extract the completion text from the message response object
-        content = message.completion.strip() if hasattr(message, 'completion') else message.get('completion', '').strip()
+
+        # Print out the message object to inspect its structure
+        st.write(message)  # This will print the structure to Streamlit
+
+        # Extract the completion text from the message response object (assuming it's under 'completion' or inspect the object with st.write)
+        content = message.completion.strip()
 
         content_clean = clean_text(content)
 
@@ -195,8 +198,7 @@ def generate_social_content(main_content, selected_channels):
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
-            # Extract the completion text from the message response object
-            generated_content[channel] = message.completion.strip() if hasattr(message, 'completion') else message.get('completion', '').strip()
+            generated_content[channel] = message.completion.strip()
         except Exception as e:
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
