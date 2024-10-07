@@ -5,9 +5,8 @@ import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
 
-anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
-
 # Initialize the Anthropic client
+anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
 st.markdown(
@@ -162,15 +161,12 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
-        # Format the prompt as per Anthropic's requirements
-        anthropic_prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
-
-        # Make the request to the Anthropic client
-        message = client.completions.create(
-            model="claude-3-5",  # Use the Claude model
-            prompt=anthropic_prompt,
-            max_tokens_to_sample=1000,  # Adjust token limit
-            temperature=0.7
+        # Use the format that worked for Anthropic
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20240620",  # Use the Claude model
+            max_tokens=1000,
+            temperature=0.7,
+            messages=[{"role": "user", "content": prompt}]
         )
         content = message['completion'].strip()  # Extract content
         content_clean = clean_text(content)
@@ -190,13 +186,11 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         try:
             prompt = social_prompts[channel]
-            anthropic_prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
-            # Use the Anthropic client for social content generation
-            message = client.completions.create(
-                model="claude-3-5",
-                prompt=anthropic_prompt,
-                max_tokens_to_sample=500,
-                temperature=0.7
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20240620",
+                max_tokens=500,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
             )
             generated_content[channel] = clean_text(message['completion'].strip())
         except Exception as e:
