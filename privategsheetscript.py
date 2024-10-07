@@ -130,65 +130,43 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-def build_template_prompt(sheet_row, template_structure):
-    job_id = sheet_row['Job ID']
-    topic_description = sheet_row['Topic-Description']
-
-    if not (job_id and topic_description and template_structure):
-        return None, None
-
-    prompt = f"Create content for Job ID {job_id}.\n\nUse the following description from the Google Sheet:\n\n{topic_description}\n\n"
-    prompt += "Follow this structure, but do NOT use the CSV content verbatim. Instead, generate content based on the description, keeping each section within the specified character limits:\n\n"
-    
-    for section_name, content in template_structure:
-        max_chars = 150  # Default character limit for all sections
-        prompt += f"Section {section_name}: Generate content based on the description. Limit to {max_chars} characters.\n"
-
-    return prompt, job_id
+def build_section_prompt(section_name, content, topic_description):
+    prompt = f"Create content for the section '{section_name}' using the description:\n\n{topic_description}\n\n"
+    prompt += f"Keep the content within 150 characters. Do NOT use the CSV content verbatim, but follow the section's guidelines."
+    return prompt
 
 def enforce_character_limit(content, max_chars):
     if len(content) > max_chars:
         return content[:max_chars].rstrip() + "..."
     return content
 
-def generate_content(prompt, job_id, template_structure, sheet_row):
-    try:
-        structured_prompt = f"Create content for Job ID {job_id}. Follow the structure from the template but generate content only based on the Google Sheet description. Do NOT use the CSV content. Keep each section within the character limits specified."
-        structured_prompt += "\n\nHere are the sections and character limits:\n"
+def generate_content_per_section(sheet_row, template_structure):
+    topic_description = sheet_row['Topic-Description']
+    job_id = sheet_row['Job ID']
+    generated_sections = []
 
-        for section_name, _ in template_structure:
-            max_chars = 150  # Default limit for all sections
-            structured_prompt += f"Section {section_name}: Please generate content for this section. Limit: {max_chars} characters.\n"
-        
-        structured_prompt += f"\n\nGoogle Sheet description for this job: {sheet_row['Topic-Description']}"
+    for section_name, content in template_structure:
+        section_prompt = build_section_prompt(section_name, content, topic_description)
 
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,
-            temperature=0.7,
-            messages=[
-                {"role": "user", "content": structured_prompt}
-            ]
-        )
+        try:
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20240620",
+                max_tokens=500,
+                temperature=0.7,
+                messages=[{"role": "user", "content": section_prompt}]
+            )
 
-        if message and message.content:
-            content = message.content[0].text.strip()
+            if message and message.content:
+                section_content = enforce_character_limit(message.content[0].text.strip(), 150)
+                generated_sections.append(f"Section {section_name}: {section_content}")
+            else:
+                st.error(f"No content generated for section '{section_name}'.")
 
-            structured_content = []
-            for section_name, _ in template_structure:
-                section_content = f"Section {section_name}: {content}"
-                truncated_content = enforce_character_limit(section_content, 150)
-                structured_content.append(truncated_content)
+        except Exception as e:
+            st.error(f"Error generating content for section '{section_name}': {e}")
+            continue
 
-            final_output = "\n\n".join(structured_content)
-            return f"Job ID {job_id}:\n\n{final_output}"
-        else:
-            st.error("No content found in the response.")
-            return None
-        
-    except Exception as e:
-        st.error(f"Error generating content: {e}")
-        return None
+    return f"Job ID {job_id}:\n\n" + "\n\n".join(generated_sections)
 
 def generate_social_content(main_content, selected_channels):
     social_prompts = {
@@ -250,12 +228,7 @@ def main():
                 st.warning(f"Template structure not found for row {idx + 1}. Skipping.")
                 continue
 
-            prompt, job_id = build_template_prompt(row, template_structure)
-
-            if not prompt or not job_id:
-                continue
-
-            generated_content = generate_content(prompt, job_id, template_structure, row)
+            generated_content = generate_content_per_section(row, template_structure)
             if generated_content:
                 generated_contents.append(generated_content)
 
