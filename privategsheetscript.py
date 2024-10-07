@@ -168,11 +168,13 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
-        message = client.completions.create(
+        message = client.messages.create(
             model="claude-3-5-sonnet-20240620",  # Updated model name
-            max_tokens_to_sample=1000,  # Adjusted for token sampling
+            max_tokens=1000,  # Adjusted for token sampling
             temperature=0.7,
-            prompt=f"{anthropic.HUMAN_PROMPT} {prompt} {anthropic.AI_PROMPT}"
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
         content = message['completion'].strip()
         content_clean = clean_text(content)
@@ -192,11 +194,13 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         try:
             prompt = social_prompts[channel]
-            message = client.completions.create(
+            message = client.messages.create(
                 model="claude-3-5-sonnet-20240620",  # Updated model name
-                max_tokens_to_sample=500,  # Adjust token limit as needed
+                max_tokens=500,  # Adjust token limit as needed
                 temperature=0.7,
-                prompt=f"{anthropic.HUMAN_PROMPT} {prompt} {anthropic.AI_PROMPT}"
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
             )
             generated_content[channel] = clean_text(message['completion'].strip())
         except Exception as e:
