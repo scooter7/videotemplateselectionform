@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import anthropic
+import os
 from google.oauth2.service_account import Credentials
 import gspread
 
@@ -9,7 +10,7 @@ import gspread
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 
 # Initialize the Anthropic client
-client = anthropic.Client(api_key=anthropic_api_key)
+client = anthropic.Anthropic(api_key=anthropic_api_key)
 
 st.markdown(
     """
@@ -168,13 +169,18 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
-        completion = client.completions.create(
-            model="claude-3.5",  # Specify the Claude model
-            prompt=f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}",
-            max_tokens_to_sample=1000,  # This replaces max_tokens
+        message = client.completions.create(
+            model="claude-3-5-sonnet-20240620",  # Updated model name
+            max_tokens_to_sample=1000,  # Adjusted for token sampling
             temperature=0.7,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
         )
-        content = completion.completion.strip()
+        content = message['completion'].strip()
         content_clean = clean_text(content)
 
         return f"Job ID {job_id}:\n\n{content_clean}"
@@ -192,13 +198,18 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         try:
             prompt = social_prompts[channel]
-            completion = client.completions.create(
-                model="claude-3.5",  # Specify the Claude model
-                prompt=f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}",
-                max_tokens_to_sample=500,  # This replaces max_tokens
+            message = client.completions.create(
+                model="claude-3-5-sonnet-20240620",  # Updated model name
+                max_tokens_to_sample=500,  # Adjust token limit as needed
                 temperature=0.7,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
-            generated_content[channel] = clean_text(completion.completion.strip())
+            generated_content[channel] = clean_text(message['completion'].strip())
         except Exception as e:
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
