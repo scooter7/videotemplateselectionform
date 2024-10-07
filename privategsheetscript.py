@@ -1,13 +1,15 @@
 import streamlit as st
 import pandas as pd
 import re
-import openai
+import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
 
-openai.api_key = st.secrets["openai"]["openai_api_key"]
+# Initialize Anthropics API key from Streamlit secrets
+anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 
-client = openai
+# Initialize the Anthropic client
+client = anthropic.Client(api_key=anthropic_api_key)
 
 st.markdown(
     """
@@ -166,14 +168,13 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that strictly follows the template structure from the CSV file, using the description from the Google Sheet to generate content."},
-                {"role": "user", "content": prompt}
-            ]
+        completion = client.completions.create(
+            model="claude-3.5",  # Specify the Claude model
+            prompt=f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}",
+            max_tokens=1000,  # Adjust based on expected length
+            temperature=0.7,
         )
-        content = completion.choices[0].message.content.strip()
+        content = completion.completion.strip()
         content_clean = clean_text(content)
 
         return f"Job ID {job_id}:\n\n{content_clean}"
@@ -191,14 +192,13 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         try:
             prompt = social_prompts[channel]
-            completion = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ]
+            completion = client.completions.create(
+                model="claude-3.5",  # Specify the Claude model
+                prompt=f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}",
+                max_tokens=500,  # Adjust token limit as needed
+                temperature=0.7,
             )
-            generated_content[channel] = clean_text(completion.choices[0].message.content.strip())
+            generated_content[channel] = clean_text(completion.completion.strip())
         except Exception as e:
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
