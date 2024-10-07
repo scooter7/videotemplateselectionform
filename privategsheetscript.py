@@ -130,34 +130,14 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-def build_template_prompt(sheet_row, template_structure):
-    job_id = sheet_row['Job ID']
-    topic_description = sheet_row['Topic-Description']
-
-    if not (job_id and topic_description and template_structure):
-        return None, None
-
-    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
-
-    umbrella_sections = {}
-    for section_name, content in template_structure:
-        max_chars = len(content)
-        
-        if '-' not in section_name:
-            umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
-        else:
-            umbrella_key = section_name.split('-')[0]
-            if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
-
-    # Add CTA-Text explicitly if it exists
-    if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
-
-    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
-
-    return prompt, job_id
+def build_section_prompt(section_name, content, max_chars, umbrella_sections, topic_description):
+    if umbrella_sections and section_name in umbrella_sections:
+        umbrella_content = umbrella_sections[section_name]
+        prompt = f"Section {section_name}: Break down the umbrella section '{umbrella_content}' using the following description:\n\n{topic_description}\n\nLimit content to {max_chars} characters."
+    else:
+        prompt = f"Section {section_name}: Use the following description to generate content:\n\n{topic_description}\n\nLimit content to {max_chars} characters."
+    
+    return prompt
 
 def enforce_character_limit(content, max_chars):
     if len(content) > max_chars:
@@ -167,11 +147,17 @@ def enforce_character_limit(content, max_chars):
 def generate_content_per_section(sheet_row, template_structure):
     topic_description = sheet_row['Topic-Description']
     job_id = sheet_row['Job ID']
+    umbrella_sections = {}
+
     generated_sections = []
 
     for section_name, content in template_structure:
         max_chars = len(content)
-        section_prompt, _ = build_template_prompt(sheet_row, template_structure)
+
+        if '-' not in section_name:
+            umbrella_sections[section_name] = content
+
+        section_prompt = build_section_prompt(section_name, content, max_chars, umbrella_sections, topic_description)
 
         try:
             message = client.messages.create(
