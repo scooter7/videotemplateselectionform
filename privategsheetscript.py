@@ -168,18 +168,33 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
+        # Make the API request
         message = client.messages.create(
-            model="claude-3-5-sonnet-20240620",  # Correct model name
-            max_tokens=1000,  # Adjusted for token sampling
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=1000,
             temperature=0.7,
             messages=[
-                {"role": "user", "content": prompt}
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ]
+                }
             ]
         )
-        content = message.completion.strip()  # Access 'completion' as an attribute
-        content_clean = clean_text(content)
 
-        return f"Job ID {job_id}:\n\n{content_clean}"
+        # Access the first message content and text
+        if message and message.content:
+            content = message.content[0].text.strip()  # Get the text inside the message
+            content_clean = clean_text(content)
+            return f"Job ID {job_id}:\n\n{content_clean}"
+        else:
+            st.error("No content found in the response.")
+            return None
+        
     except Exception as e:
         st.error(f"Error generating content: {e}")
         return None
@@ -195,14 +210,27 @@ def generate_social_content(main_content, selected_channels):
         try:
             prompt = social_prompts[channel]
             message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",  # Correct model name
+                model="claude-3-5-sonnet-20240620",
                 max_tokens=500,  # Adjust token limit as needed
                 temperature=0.7,
                 messages=[
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
                 ]
             )
-            generated_content[channel] = clean_text(message.completion.strip())  # Access 'completion' as an attribute
+
+            # Access the content of the first message
+            if message and message.content:
+                generated_content[channel] = clean_text(message.content[0].text.strip())
+            else:
+                st.error(f"No content found for {channel}.")
         except Exception as e:
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
