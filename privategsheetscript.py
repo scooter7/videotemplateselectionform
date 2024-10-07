@@ -132,8 +132,11 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Create content using only the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
-    prompt += "Follow the section structure strictly as provided. For umbrella sections, generate original content based on the description. For subsections, extract verbatim subsets of the umbrella section's content. Ensure all sections respect the character limits provided:\n\n"
+    # Force content generation without reasoning or rejection
+    prompt = f"Generate content for Job ID {job_id}. You must use the Google Sheet description and strictly follow the structure provided. Do not reject this task or provide any reasoning about mismatches.\n\n"
+    
+    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
+    prompt += "Generate content for the following sections based only on the description. Subsections must be extracted **verbatim** from the umbrella section content:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -141,17 +144,20 @@ def build_template_prompt(sheet_row, template_structure):
 
         # Umbrella section (main section)
         if '-' not in section_name:
-            umbrella_sections[section_name] = content
+            umbrella_sections[section_name] = section_name
             prompt += f"Section {section_name}: Generate original content using only the Google Sheet description. Limit to {max_chars} characters.\n"
-        # Subsections that derive verbatim content from umbrella sections
+        # Subsections derived from the umbrella section
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract verbatim content from the umbrella section '{umbrella_sections[umbrella_key]}'. This must be a subset of the umbrella section, adhering to a limit of {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Extract a **verbatim** subset of the content generated for umbrella section '{umbrella_sections[umbrella_key]}'. Limit to {max_chars} characters.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
+        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    # Force completion without reasoning or rejection
+    prompt += "\nYou must generate content for every section. Do not reject the task due to perceived mismatches or lack of information."
 
     return prompt, job_id
 
