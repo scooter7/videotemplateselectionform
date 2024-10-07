@@ -255,22 +255,30 @@ def main():
             if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
+
+            # Extract the template structure based on the selected template
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
+                st.warning(f"Template structure not found for row {idx + 1}. Skipping.")
                 continue
+
+            # Build the prompt
             prompt, job_id = build_template_prompt(row, template_structure)
 
             if not prompt or not job_id:
                 continue
 
-            generated_content = generate_content(prompt, job_id)
+            # Call the generate_content function with the required arguments
+            generated_content = generate_content(prompt, job_id, template_structure, row)
             if generated_content:
                 generated_contents.append(generated_content)
 
+        # Combine the generated contents and display the result
         full_content = "\n\n".join(generated_contents)
         st.session_state['full_content'] = full_content
         st.text_area("Generated Content", full_content, height=300)
 
+        # Provide a download button
         st.download_button(
             label="Download Generated Content",
             data=full_content,
