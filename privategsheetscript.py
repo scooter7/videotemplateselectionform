@@ -7,6 +7,7 @@ import gspread
 
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 
+# Initialize the Anthropic client
 client = anthropic.Client(api_key=anthropic_api_key)
 
 st.markdown(
@@ -125,54 +126,56 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-def build_section_prompt(section_name, content, max_chars, umbrella_sections, topic_description):
-    if section_name in umbrella_sections:
-        umbrella_content = umbrella_sections[section_name]
-        prompt = f"Create content for the section '{section_name}' as part of the umbrella section '{umbrella_content}'. Ensure the content aligns with the description and remains concise:\n\n{topic_description}\n\nLimit the content to around {max_chars} characters but it's okay to slightly exceed if needed to complete the idea."
-    else:
-        prompt = f"Create content for the section '{section_name}' using the description provided. Focus only on the content required for this section:\n\n{topic_description}\n\nLimit the content to around {max_chars} characters but it's okay to slightly exceed if needed to complete the idea."
-    
-    return prompt
+def build_template_prompt(sheet_row, template_structure):
+    job_id = sheet_row['Job ID']
+    topic_description = sheet_row['Topic-Description']
+
+    if not (job_id and topic_description and template_structure):
+        return None, None
+
+    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
+
+    umbrella_sections = {}
+    for section_name, content in template_structure:
+        max_chars = len(content)
+        
+        if '-' not in section_name:
+            umbrella_sections[section_name] = content
+            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
+
+    # Add CTA-Text explicitly if it exists
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
+
+    return prompt, job_id
 
 def enforce_character_limit(content, max_chars):
-    if len(content) > max_chars + 10:  # Allow some flexibility to complete an idea
+    if len(content) > max_chars:
         return content[:max_chars].rstrip() + "..."
     return content
 
-def generate_content_per_section(sheet_row, template_structure):
-    topic_description = sheet_row['Topic-Description']
-    job_id = sheet_row['Job ID']
-    umbrella_sections = {}
+def generate_content(prompt, job_id):
+    try:
+        # Update the request to the Anthropic client
+        message = client.completions.create(
+            model="claude-3-5",  # Use the Claude model
+            prompt=prompt,
+            max_tokens_to_sample=1000,  # Adjust token limit
+            temperature=0.7
+        )
+        content = message['completion'].strip()  # Extract content
+        content_clean = clean_text(content)
 
-    generated_sections = []
-
-    for section_name, content in template_structure:
-        max_chars = len(content)
-
-        if '-' not in section_name:
-            umbrella_sections[section_name] = content
-
-        section_prompt = build_section_prompt(section_name, content, max_chars, umbrella_sections, topic_description)
-
-        try:
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=500,
-                temperature=0.7,
-                messages=[{"role": "user", "content": section_prompt}]
-            )
-
-            if message and message.content:
-                section_content = enforce_character_limit(message.content[0].text.strip(), max_chars)
-                generated_sections.append(f"Section {section_name}: {section_content}")
-            else:
-                st.error(f"No content generated for section '{section_name}'.")
-
-        except Exception as e:
-            st.error(f"Error generating content for section '{section_name}': {e}")
-            continue
-
-    return f"Job ID {job_id}:\n\n" + "\n\n".join(generated_sections)
+        return f"Job ID {job_id}:\n\n{content_clean}"
+    except Exception as e:
+        st.error(f"Error generating content: {e}")
+        return None
 
 def generate_social_content(main_content, selected_channels):
     social_prompts = {
@@ -184,17 +187,14 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         try:
             prompt = social_prompts[channel]
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=500,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
+            # Use the Anthropic client for social content generation
+            message = client.completions.create(
+                model="claude-3-5",
+                prompt=prompt,
+                max_tokens_to_sample=500,
+                temperature=0.7
             )
-
-            if message and message.content:
-                generated_content[channel] = clean_text(message.content[0].text.strip())
-            else:
-                st.error(f"No content found for {channel}.")
+            generated_content[channel] = clean_text(message['completion'].strip())
         except Exception as e:
             st.error(f"Error generating {channel} content: {e}")
     return generated_content
@@ -218,13 +218,15 @@ def main():
             if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
-
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
-                st.warning(f"Template structure not found for row {idx + 1}. Skipping.")
+                continue
+            prompt, job_id = build_template_prompt(row, template_structure)
+
+            if not prompt or not job_id:
                 continue
 
-            generated_content = generate_content_per_section(row, template_structure)
+            generated_content = generate_content(prompt, job_id)
             if generated_content:
                 generated_contents.append(generated_content)
 
