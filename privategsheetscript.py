@@ -5,10 +5,8 @@ import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
 
-# Initialize Anthropics API key from Streamlit secrets
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 
-# Initialize the Anthropic client
 client = anthropic.Client(api_key=anthropic_api_key)
 
 st.markdown(
@@ -144,19 +142,19 @@ def build_template_prompt(sheet_row, template_structure):
     prompt += "Follow this structure, but do NOT use the CSV content verbatim. Instead, generate content based on the description, keeping each section within the specified character limits:\n\n"
     
     for section_name, content in template_structure:
-        max_chars = len(content)
+        max_chars = int(len(content))
         prompt += f"Section {section_name}: Generate content based on the description. Limit to {max_chars} characters.\n"
 
     return prompt, job_id
 
 def enforce_character_limit(content, max_chars):
+    max_chars = int(max_chars)
     if len(content) > max_chars:
         return content[:max_chars].rstrip() + "..."
     return content
 
 def generate_content(prompt, job_id, template_structure, sheet_row):
     try:
-        # Build the detailed prompt for the LLM
         structured_prompt = f"Create content for Job ID {job_id}. Follow the structure from the template but generate content only based on the Google Sheet description. Do NOT use the CSV content. Keep each section within the character limits specified."
         structured_prompt += "\n\nHere are the sections and character limits:\n"
 
@@ -165,21 +163,18 @@ def generate_content(prompt, job_id, template_structure, sheet_row):
         
         structured_prompt += f"\n\nGoogle Sheet description for this job: {sheet_row['Topic-Description']}"
 
-        # Make the API request
         message = client.messages.create(
             model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,  # Adjusted for token sampling
+            max_tokens=1000,
             temperature=0.7,
             messages=[
                 {"role": "user", "content": structured_prompt}
             ]
         )
 
-        # Access the content of the message
         if message and message.content:
             content = message.content[0].text.strip()
 
-            # Enforce character limits manually if the LLM doesn't respect them
             structured_content = []
             for section_name, max_chars in template_structure:
                 section_content = f"Section {section_name}: {content}"
@@ -191,10 +186,6 @@ def generate_content(prompt, job_id, template_structure, sheet_row):
         else:
             st.error("No content found in the response.")
             return None
-        
-    except Exception as e:
-        st.error(f"Error generating content: {e}")
-        return None
         
     except Exception as e:
         st.error(f"Error generating content: {e}")
@@ -212,7 +203,7 @@ def generate_social_content(main_content, selected_channels):
             prompt = social_prompts[channel]
             message = client.messages.create(
                 model="claude-3-5-sonnet-20240620",
-                max_tokens=500,  # Adjust token limit as needed
+                max_tokens=500,
                 temperature=0.7,
                 messages=[
                     {
@@ -227,7 +218,6 @@ def generate_social_content(main_content, selected_channels):
                 ]
             )
 
-            # Access the content of the first message
             if message and message.content:
                 generated_content[channel] = clean_text(message.content[0].text.strip())
             else:
@@ -256,29 +246,24 @@ def main():
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
 
-            # Extract the template structure based on the selected template
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
                 st.warning(f"Template structure not found for row {idx + 1}. Skipping.")
                 continue
 
-            # Build the prompt
             prompt, job_id = build_template_prompt(row, template_structure)
 
             if not prompt or not job_id:
                 continue
 
-            # Call the generate_content function with the required arguments
             generated_content = generate_content(prompt, job_id, template_structure, row)
             if generated_content:
                 generated_contents.append(generated_content)
 
-        # Combine the generated contents and display the result
         full_content = "\n\n".join(generated_contents)
         st.session_state['full_content'] = full_content
         st.text_area("Generated Content", full_content, height=300)
 
-        # Provide a download button
         st.download_button(
             label="Download Generated Content",
             data=full_content,
