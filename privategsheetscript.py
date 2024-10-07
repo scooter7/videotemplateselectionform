@@ -162,10 +162,13 @@ def enforce_character_limit(content, max_chars):
 
 def generate_content(prompt, job_id):
     try:
-        # Update the request to the Anthropic client
+        # Format the prompt as per Anthropic's requirements
+        anthropic_prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
+
+        # Make the request to the Anthropic client
         message = client.completions.create(
             model="claude-3-5",  # Use the Claude model
-            prompt=prompt,
+            prompt=anthropic_prompt,
             max_tokens_to_sample=1000,  # Adjust token limit
             temperature=0.7
         )
@@ -187,10 +190,11 @@ def generate_social_content(main_content, selected_channels):
     for channel in selected_channels:
         try:
             prompt = social_prompts[channel]
+            anthropic_prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
             # Use the Anthropic client for social content generation
             message = client.completions.create(
                 model="claude-3-5",
-                prompt=prompt,
+                prompt=anthropic_prompt,
                 max_tokens_to_sample=500,
                 temperature=0.7
             )
