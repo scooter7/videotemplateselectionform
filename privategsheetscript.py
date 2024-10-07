@@ -144,11 +144,10 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    # Updated instruction to force unique content extraction for each subsection
     prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given.\n\n"
     
     prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "Generate content for the following sections. For umbrella sections, create the main content based on the description. For subsections, extract **distinct, meaningful parts** from the umbrella section. Ensure that **each subsection** is unique and represents a different part of the umbrella content. Do not simply repeat phrases:\n\n"
+    prompt += "Generate content for the following sections. For umbrella sections, create the main content based on the description. For subsections, **strictly divide** the content of the umbrella section into distinct, meaningful parts. You may **not introduce new content** or pull from outside the umbrella section:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -157,20 +156,20 @@ def build_template_prompt(sheet_row, template_structure):
         # Generate umbrella sections first
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
-            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Aim to stay within {max_chars} characters, but you can slightly exceed it for completeness.\n"
+            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Keep it within {max_chars} characters.\n"
         
-        # Subsections must pull distinct, meaningful content from umbrella sections
+        # Subsections must divide and pull content from umbrella sections
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                # Extract distinct and unique part from the umbrella section
-                prompt += f"Section {section_name}: Extract a **distinct, unique, and meaningful** subset from the umbrella section '{umbrella_sections[umbrella_key]}'. Each subsection should cover a different part of the umbrella content, without repeating phrases. You can slightly exceed the {max_chars} characters for completeness.\n"
+                # The new instruction forces the subsections to split the umbrella content
+                prompt += f"Section {section_name}: Extract a **non-overlapping, meaningful part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Each subsection must pull a different part of the umbrella section, without introducing any new content. Ensure this section adheres to the character limit ({max_chars} characters) while staying consistent with the umbrella content.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
-    prompt += "\nGenerate content for every section, ensuring subsections are distinct and represent different parts of the umbrella content."
+    prompt += "\nGenerate content for every section, ensuring subsections are derived strictly from the umbrella section content."
 
     return prompt, job_id
 
