@@ -141,11 +141,11 @@ def build_template_prompt(sheet_row, template_structure):
     prompt += "Follow this structure, but do NOT use the CSV content verbatim. Instead, generate content based on the description, keeping each section within the specified character limits:\n\n"
     
     for section_name, content in template_structure:
+        # Set a default limit of 150 if content is not a valid integer length
         try:
-            # Ensure max_chars is an integer, fallback to a default if necessary
-            max_chars = int(len(content))  # If length of content is not valid, this will raise an error
+            max_chars = int(content) if content.isdigit() else 150
         except ValueError:
-            max_chars = 150  # Default character limit if length isn't a valid number
+            max_chars = 150
             
         prompt += f"Section {section_name}: Generate content based on the description. Limit to {max_chars} characters.\n"
 
@@ -164,10 +164,9 @@ def generate_content(prompt, job_id, template_structure, sheet_row):
 
         for section_name, max_chars in template_structure:
             try:
-                # Ensure max_chars is an integer
-                max_chars = int(len(max_chars))
+                max_chars = int(max_chars)
             except ValueError:
-                max_chars = 150  # Fallback to default value
+                max_chars = 150
 
             structured_prompt += f"Section {section_name}: Please generate content for this section. Limit: {max_chars} characters.\n"
         
