@@ -139,25 +139,13 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
+    prompt = f"Create content for Job ID {job_id}.\n\nUse the following description from the Google Sheet:\n\n{topic_description}\n\n"
 
-    umbrella_sections = {}
+    prompt += "Follow this structure, but do NOT use the CSV content verbatim. Instead, generate content based on the description, keeping each section within the specified character limits:\n\n"
+    
     for section_name, content in template_structure:
         max_chars = len(content)
-        
-        if '-' not in section_name:
-            umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
-        else:
-            umbrella_key = section_name.split('-')[0]
-            if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
-
-    # Add CTA-Text explicitly if it exists
-    if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
-
-    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
+        prompt += f"Section {section_name}: Generate content based on the description. Limit to {max_chars} characters.\n"
 
     return prompt, job_id
 
@@ -166,34 +154,47 @@ def enforce_character_limit(content, max_chars):
         return content[:max_chars].rstrip() + "..."
     return content
 
-def generate_content(prompt, job_id):
+def generate_content(prompt, job_id, template_structure, sheet_row):
     try:
+        # Build the detailed prompt for the LLM
+        structured_prompt = f"Create content for Job ID {job_id}. Follow the structure from the template but generate content only based on the Google Sheet description. Do NOT use the CSV content. Keep each section within the character limits specified."
+        structured_prompt += "\n\nHere are the sections and character limits:\n"
+
+        for section_name, max_chars in template_structure:
+            structured_prompt += f"Section {section_name}: Please generate content for this section. Limit: {max_chars} characters.\n"
+        
+        structured_prompt += f"\n\nGoogle Sheet description for this job: {sheet_row['Topic-Description']}"
+
         # Make the API request
         message = client.messages.create(
             model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,
+            max_tokens=1000,  # Adjusted for token sampling
             temperature=0.7,
             messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ]
-                }
+                {"role": "user", "content": structured_prompt}
             ]
         )
 
-        # Access the first message content and text
+        # Access the content of the message
         if message and message.content:
-            content = message.content[0].text.strip()  # Get the text inside the message
-            content_clean = clean_text(content)
-            return f"Job ID {job_id}:\n\n{content_clean}"
+            content = message.content[0].text.strip()
+
+            # Enforce character limits manually if the LLM doesn't respect them
+            structured_content = []
+            for section_name, max_chars in template_structure:
+                section_content = f"Section {section_name}: {content}"
+                truncated_content = enforce_character_limit(section_content, max_chars)
+                structured_content.append(truncated_content)
+
+            final_output = "\n\n".join(structured_content)
+            return f"Job ID {job_id}:\n\n{final_output}"
         else:
             st.error("No content found in the response.")
             return None
+        
+    except Exception as e:
+        st.error(f"Error generating content: {e}")
+        return None
         
     except Exception as e:
         st.error(f"Error generating content: {e}")
