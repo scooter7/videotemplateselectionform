@@ -171,7 +171,7 @@ def generate_content(prompt, job_id):
         completion = client.completions.create(
             model="claude-3.5",  # Specify the Claude model
             prompt=f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}",
-            max_tokens=1000,  # Adjust based on expected length
+            max_tokens_to_sample=1000,  # This replaces max_tokens
             temperature=0.7,
         )
         content = completion.completion.strip()
@@ -195,7 +195,7 @@ def generate_social_content(main_content, selected_channels):
             completion = client.completions.create(
                 model="claude-3.5",  # Specify the Claude model
                 prompt=f"{anthropic.HUMAN_PROMPT} {prompt}{anthropic.AI_PROMPT}",
-                max_tokens=500,  # Adjust token limit as needed
+                max_tokens_to_sample=500,  # This replaces max_tokens
                 temperature=0.7,
             )
             generated_content[channel] = clean_text(completion.completion.strip())
