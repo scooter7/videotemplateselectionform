@@ -132,10 +132,10 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"You are tasked with generating content for Job ID {job_id} using the provided description. Please follow the section structure exactly as listed, but only use the Google Sheet description to generate the content, even if the description doesn't perfectly match the section names.\n\n"
+    prompt = f"You are tasked with generating content for Job ID {job_id} using the provided description. Please follow the section structure exactly as listed. Use the description to generate content, but note that **subsections must be detailed expansions of the umbrella section content**:\n\n"
     
     prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "Generate content for the following sections based on the description. **Subsections must always be derived from the umbrella section content, not new or independent ideas**:\n\n"
+    prompt += "Generate content for the following sections based on the description. **Subsections must expand on or provide details from the umbrella section content and cannot introduce new ideas**:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -149,13 +149,13 @@ def build_template_prompt(sheet_row, template_structure):
             # Subsections derived from umbrella sections
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Use only the content generated for '{umbrella_sections[umbrella_key]}'. Break down this content into smaller pieces or details. Keep it under {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Expand on the content generated for '{umbrella_sections[umbrella_key]}'. Provide more specific details or a breakdown, without introducing new concepts. Keep it under {max_chars} characters.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
-    prompt += "\nDo not reject this task due to mismatches between the description and the section names. If there is no direct match, use your best judgment to generate appropriate content. Always ensure that subsections are derived from umbrella sections."
+    prompt += "\nStrictly follow these instructions, ensuring that subsections are always derived from the umbrella sections. If no direct match exists, use your best judgment to generate appropriate content."
 
     return prompt, job_id
 
