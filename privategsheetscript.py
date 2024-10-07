@@ -135,19 +135,21 @@ def build_template_prompt(sheet_row, template_structure):
     prompt = f"You are tasked with generating content for Job ID {job_id} using the provided description. Please follow the section structure exactly as listed, but only use the Google Sheet description to generate the content, even if the description doesn't perfectly match the section names.\n\n"
     
     prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "Generate content for the following sections based on the description, even if there seems to be no direct match:\n\n"
+    prompt += "Generate content for the following sections based on the description. Subsections should be derived or expanded from the corresponding umbrella section content:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
         
+        # Handle umbrella sections
         if '-' not in section_name:
-            umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Please generate content. Keep it under {max_chars} characters. Use your creativity if necessary.\n"
+            umbrella_sections[section_name] = section_name
+            prompt += f"Section {section_name}: Generate original content based on the description. Keep it under {max_chars} characters.\n"
         else:
+            # Subsections derived from umbrella sections
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Please expand on the umbrella section '{umbrella_sections[umbrella_key]}'. Keep it under {max_chars} characters.\n"
+                prompt += f"Section {section_name}: This is a subset or expansion of the content in '{umbrella_sections[umbrella_key]}'. Please generate content that is derived from that section, keeping it under {max_chars} characters.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
