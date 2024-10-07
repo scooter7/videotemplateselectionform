@@ -140,7 +140,7 @@ def build_template_prompt(sheet_row, template_structure):
         
         if '-' not in section_name:
             umbrella_sections[section_name] = content
-            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
+            prompt += f"Section {section_name}: Generate content using the Google Sheet description. Limit to {max_chars} characters.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
@@ -150,7 +150,7 @@ def build_template_prompt(sheet_row, template_structure):
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
 
-    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Use only the content from the Google Sheet description to generate the sections."
 
     return prompt, job_id
 
