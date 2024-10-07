@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import re
 import anthropic
-import os
 from google.oauth2.service_account import Credentials
 import gspread
 
@@ -10,7 +9,7 @@ import gspread
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 
 # Initialize the Anthropic client
-client = anthropic.Anthropic(api_key=anthropic_api_key)
+client = anthropic.Client(api_key=anthropic_api_key)
 
 st.markdown(
     """
@@ -173,12 +172,7 @@ def generate_content(prompt, job_id):
             model="claude-3-5-sonnet-20240620",  # Updated model name
             max_tokens_to_sample=1000,  # Adjusted for token sampling
             temperature=0.7,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+            prompt=f"{anthropic.HUMAN_PROMPT} {prompt} {anthropic.AI_PROMPT}"
         )
         content = message['completion'].strip()
         content_clean = clean_text(content)
@@ -202,12 +196,7 @@ def generate_social_content(main_content, selected_channels):
                 model="claude-3-5-sonnet-20240620",  # Updated model name
                 max_tokens_to_sample=500,  # Adjust token limit as needed
                 temperature=0.7,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+                prompt=f"{anthropic.HUMAN_PROMPT} {prompt} {anthropic.AI_PROMPT}"
             )
             generated_content[channel] = clean_text(message['completion'].strip())
         except Exception as e:
