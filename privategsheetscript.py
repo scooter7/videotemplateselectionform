@@ -125,6 +125,16 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+def enforce_character_limit(content, max_chars):
+    # Ensure we don't split words in half and keep the content meaningful
+    if len(content) > max_chars:
+        # Try to truncate at the last space before the character limit to avoid breaking words
+        truncated_content = content[:max_chars].rsplit(' ', 1)[0]
+        if not truncated_content:  # If truncating removes all content, fallback to strict character limit cut
+            return content[:max_chars].rstrip() + "..."
+        return truncated_content + "..."
+    return content
+
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -132,10 +142,10 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} using only the description from the Google Sheet. Follow the section structure exactly as given.\n\n"
+    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the structure provided and extract **verbatim** subsections. Do not paraphrase or reject the task due to perceived mismatches.\n\n"
     
     prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "Generate content for the following sections. For umbrella sections, create the main content based on the description. For subsections, extract **verbatim** parts from the umbrella section content. Do not paraphrase or create new content:\n\n"
+    prompt += "Generate content for the following sections. For umbrella sections, create the main content based on the description. For subsections, extract **verbatim**, complete phrases from the umbrella section. Avoid arbitrary truncation:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -146,24 +156,20 @@ def build_template_prompt(sheet_row, template_structure):
             umbrella_sections[section_name] = section_name
             prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Keep it under {max_chars} characters.\n"
         
-        # Subsections must be strict, verbatim extractions from umbrella sections
+        # Subsections must pull meaningful content from umbrella sections
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a **verbatim** part from the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure this is not paraphrased or altered. Limit to {max_chars} characters.\n"
+                # Extract meaningful, verbatim part
+                prompt += f"Section {section_name}: Extract a meaningful, verbatim phrase or subset from the umbrella section '{umbrella_sections[umbrella_key]}'. Do not arbitrarily cut off words. Limit to {max_chars} characters.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
-    prompt += "\nYou must generate content for every section. Do not paraphrase or introduce new content in the subsections. Extract them verbatim from the umbrella sections."
+    prompt += "\nGenerate content for every section, ensuring subsections are complete, meaningful subsets."
 
     return prompt, job_id
-
-def enforce_character_limit(content, max_chars):
-    if len(content) > max_chars:
-        return content[:max_chars].rstrip() + "..."
-    return content
 
 def generate_content(prompt, job_id):
     try:
