@@ -126,49 +126,76 @@ def extract_template_structure(selected_template, examples_data):
         if col in example_row.columns:
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
-                # Instead of using text content, ensure we retrieve the proper character limit or default to 150
-                max_chars = int(text_element) if str(text_element).isdigit() else 150  # Assume the content in the CSV might contain character limits.
-                template_structure.append((col, max_chars))
+                template_structure.append((col, text_element))
 
     return template_structure
 
-def build_section_prompt(section_name, max_chars, topic_description):
-    prompt = f"Create content for the section '{section_name}' based on the following description:\n\n{topic_description}\n\n"
-    prompt += f"Limit the content to {max_chars} characters, focusing on unique aspects for this section. Do NOT repeat content from other sections."
-    return prompt
+def build_template_prompt(sheet_row, template_structure):
+    job_id = sheet_row['Job ID']
+    topic_description = sheet_row['Topic-Description']
+
+    if not (job_id and topic_description and template_structure):
+        return None, None
+
+    prompt = f"Create content using the following description from the Google Sheet for Job ID {job_id}:\n\n{topic_description}\n\n"
+
+    umbrella_sections = {}
+    for section_name, content in template_structure:
+        max_chars = len(content)
+        
+        if '-' not in section_name:
+            umbrella_sections[section_name] = content
+            prompt += f"Section {section_name}: Use the Google Sheet description to generate content for this section. Limit to {max_chars} characters.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"Section {section_name}: Break down the umbrella section '{umbrella_sections[umbrella_key]}' as follows. Limit to {max_chars} characters.\n"
+
+    # Add CTA-Text explicitly if it exists
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure that a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    prompt += "\nStrictly follow the section names and structure from the CSV template. Ensure every section is generated, including CTA-Text and other specific sections."
+
+    return prompt, job_id
 
 def enforce_character_limit(content, max_chars):
     if len(content) > max_chars:
         return content[:max_chars].rstrip() + "..."
     return content
 
-def generate_content_per_section(sheet_row, template_structure):
-    topic_description = sheet_row['Topic-Description']
-    job_id = sheet_row['Job ID']
-    generated_sections = []
+def generate_content(sheet_row, template_structure):
+    prompt, job_id = build_template_prompt(sheet_row, template_structure)
 
-    for section_name, max_chars in template_structure:
-        section_prompt = build_section_prompt(section_name, max_chars, topic_description)
+    if not prompt or not job_id:
+        return None
 
-        try:
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=500,
-                temperature=0.7,
-                messages=[{"role": "user", "content": section_prompt}]
-            )
+    try:
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=1000,
+            temperature=0.7,
+            messages=[{"role": "user", "content": prompt}]
+        )
 
-            if message and message.content:
-                section_content = enforce_character_limit(message.content[0].text.strip(), max_chars)
-                generated_sections.append(f"Section {section_name}: {section_content}")
-            else:
-                st.error(f"No content generated for section '{section_name}'.")
+        if message and message.content:
+            content = message.content[0].text.strip()
 
-        except Exception as e:
-            st.error(f"Error generating content for section '{section_name}': {e}")
-            continue
+            structured_content = []
+            for section_name, max_chars in template_structure:
+                section_content = f"Section {section_name}: {content}"
+                truncated_content = enforce_character_limit(section_content, len(max_chars))
+                structured_content.append(truncated_content)
 
-    return f"Job ID {job_id}:\n\n" + "\n\n".join(generated_sections)
+            final_output = "\n\n".join(structured_content)
+            return f"Job ID {job_id}:\n\n{final_output}"
+        else:
+            st.error("No content found in the response.")
+            return None
+        
+    except Exception as e:
+        st.error(f"Error generating content: {e}")
+        return None
 
 def generate_social_content(main_content, selected_channels):
     social_prompts = {
@@ -184,17 +211,7 @@ def generate_social_content(main_content, selected_channels):
                 model="claude-3-5-sonnet-20240620",
                 max_tokens=500,
                 temperature=0.7,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ]
+                messages=[{"role": "user", "content": prompt}]
             )
 
             if message and message.content:
@@ -230,7 +247,7 @@ def main():
                 st.warning(f"Template structure not found for row {idx + 1}. Skipping.")
                 continue
 
-            generated_content = generate_content_per_section(row, template_structure)
+            generated_content = generate_content(row, template_structure)
             if generated_content:
                 generated_contents.append(generated_content)
 
