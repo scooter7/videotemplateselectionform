@@ -60,11 +60,6 @@ possible_columns = [
     "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
     "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
     "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
-    "Text06", "Text06-1", "Text06-2", "Text06-3", "Text06-4", "06BG-Theme-Text",
-    "Text07", "Text07-1", "Text07-2", "Text07-3", "Text07-4", "07BG-Theme-Text",
-    "Text08", "Text08-1", "Text08-2", "Text08-3", "Text08-4", "08BG-Theme-Text",
-    "Text09", "Text09-1", "Text09-2", "Text09-3", "Text09-4", "09BG-Theme-Text",
-    "Text10", "Text10-1", "Text10-2", "Text10-3", "Text10-4", "10BG-Theme-Text",
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
@@ -133,14 +128,14 @@ def extract_template_structure(selected_template, examples_data):
 def build_section_prompt(section_name, content, max_chars, umbrella_sections, topic_description):
     if section_name in umbrella_sections:
         umbrella_content = umbrella_sections[section_name]
-        prompt = f"Create content for section '{section_name}' as part of the umbrella section '{umbrella_content}'. Focus only on the relevant details from the description:\n\n{topic_description}\n\nLimit the content to {max_chars} characters."
+        prompt = f"Create content for the section '{section_name}' as part of the umbrella section '{umbrella_content}'. Ensure the content aligns with the description and remains concise:\n\n{topic_description}\n\nLimit the content to around {max_chars} characters but it's okay to slightly exceed if needed to complete the idea."
     else:
-        prompt = f"Create content for section '{section_name}' using the description:\n\n{topic_description}\n\nLimit the content to {max_chars} characters."
+        prompt = f"Create content for the section '{section_name}' using the description provided. Focus only on the content required for this section:\n\n{topic_description}\n\nLimit the content to around {max_chars} characters but it's okay to slightly exceed if needed to complete the idea."
     
     return prompt
 
 def enforce_character_limit(content, max_chars):
-    if len(content) > max_chars:
+    if len(content) > max_chars + 10:  # Allow some flexibility to complete an idea
         return content[:max_chars].rstrip() + "..."
     return content
 
