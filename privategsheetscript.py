@@ -132,11 +132,10 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    # Force content generation without reasoning or rejection
     prompt = f"Generate content for Job ID {job_id}. You must use the Google Sheet description and strictly follow the structure provided. Do not reject this task or provide any reasoning about mismatches.\n\n"
     
     prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "Generate content for the following sections based only on the description. Subsections must be extracted **verbatim** from the umbrella section content:\n\n"
+    prompt += "Generate content for the following sections based only on the description. Subsections must be extracted **verbatim**, but they should be meaningful and not arbitrary cuts from the umbrella section:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -150,13 +149,13 @@ def build_template_prompt(sheet_row, template_structure):
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a **verbatim** subset of the content generated for umbrella section '{umbrella_sections[umbrella_key]}'. Limit to {max_chars} characters.\n"
+                # More intelligent breakdown of umbrella section for subsections
+                prompt += f"Section {section_name}: Extract a meaningful and coherent subset from the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure this is not just a truncated part but a clear, meaningful part of the content. Limit to {max_chars} characters.\n"
 
     # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
-    # Force completion without reasoning or rejection
     prompt += "\nYou must generate content for every section. Do not reject the task due to perceived mismatches or lack of information."
 
     return prompt, job_id
