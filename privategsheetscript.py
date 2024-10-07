@@ -126,13 +126,15 @@ def extract_template_structure(selected_template, examples_data):
         if col in example_row.columns:
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
-                template_structure.append((col, text_element))
+                # Instead of using text content, ensure we retrieve the proper character limit or default to 150
+                max_chars = int(text_element) if str(text_element).isdigit() else 150  # Assume the content in the CSV might contain character limits.
+                template_structure.append((col, max_chars))
 
     return template_structure
 
-def build_section_prompt(section_name, content, topic_description):
-    prompt = f"Create content for the section '{section_name}' using the description:\n\n{topic_description}\n\n"
-    prompt += f"Keep the content within 150 characters. Do NOT use the CSV content verbatim, but follow the section's guidelines."
+def build_section_prompt(section_name, max_chars, topic_description):
+    prompt = f"Create content for the section '{section_name}' based on the following description:\n\n{topic_description}\n\n"
+    prompt += f"Limit the content to {max_chars} characters, focusing on unique aspects for this section. Do NOT repeat content from other sections."
     return prompt
 
 def enforce_character_limit(content, max_chars):
@@ -145,8 +147,8 @@ def generate_content_per_section(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     generated_sections = []
 
-    for section_name, content in template_structure:
-        section_prompt = build_section_prompt(section_name, content, topic_description)
+    for section_name, max_chars in template_structure:
+        section_prompt = build_section_prompt(section_name, max_chars, topic_description)
 
         try:
             message = client.messages.create(
@@ -157,7 +159,7 @@ def generate_content_per_section(sheet_row, template_structure):
             )
 
             if message and message.content:
-                section_content = enforce_character_limit(message.content[0].text.strip(), 150)
+                section_content = enforce_character_limit(message.content[0].text.strip(), max_chars)
                 generated_sections.append(f"Section {section_name}: {section_content}")
             else:
                 st.error(f"No content generated for section '{section_name}'.")
