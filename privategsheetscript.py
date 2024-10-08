@@ -63,7 +63,6 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
-@st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
