@@ -4,6 +4,7 @@ import re
 import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
+import time
 
 # Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
@@ -171,8 +172,6 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-import time
-
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -229,34 +228,47 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     st.error(f"Error generating {channel} content: {e}")
     return generated_content
 
-if st.button("Generate Content"):
-    generated_contents = []
-    for idx, row in sheet_data.iterrows():
-        if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
-            st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
-            continue
-        template_structure = extract_template_structure(row['Selected-Template'], examples_data)
-        if template_structure is None:
-            continue
-        prompt, job_id = build_template_prompt(row, template_structure)
+def main():
+    st.title("AI Script Generator from Google Sheets and Templates")
+    st.markdown("---")
 
-        if not prompt or not job_id:
-            continue
+    sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+    examples_data = load_examples()
 
-        generated_content = generate_content_with_retry(prompt, job_id)  # Use generate_content_with_retry instead
-        if generated_content:
-            generated_contents.append(generated_content)
+    if sheet_data.empty or examples_data.empty:
+        st.error("No data available from Google Sheets or Templates CSV.")
+        return
 
-    full_content = "\n\n".join(generated_contents)
-    st.session_state['full_content'] = full_content
-    st.text_area("Generated Content", full_content, height=300)
+    st.dataframe(sheet_data)
 
-    st.download_button(
-        label="Download Generated Content",
-        data=full_content,
-        file_name="generated_content.txt",
-        mime="text/plain"
-    )
+    if st.button("Generate Content"):
+        generated_contents = []
+        for idx, row in sheet_data.iterrows():
+            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
+                continue
+            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
+            if template_structure is None:
+                continue
+            prompt, job_id = build_template_prompt(row, template_structure)
+
+            if not prompt or not job_id:
+                continue
+
+            generated_content = generate_content_with_retry(prompt, job_id)
+            if generated_content:
+                generated_contents.append(generated_content)
+
+        full_content = "\n\n".join(generated_contents)
+        st.session_state['full_content'] = full_content
+        st.text_area("Generated Content", full_content, height=300)
+
+        st.download_button(
+            label="Download Generated Content",
+            data=full_content,
+            file_name="generated_content.txt",
+            mime="text/plain"
+        )
 
     st.markdown("---")
     st.header("Generate Social Media Posts")
@@ -274,7 +286,7 @@ if st.button("Generate Content"):
 
     if selected_channels and 'full_content' in st.session_state:
         if st.button("Generate Social Media Content"):
-            social_content = generate_social_content(st.session_state['full_content'], selected_channels)
+            social_content = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
             st.session_state['social_content'] = social_content
 
     if 'social_content' in st.session_state:
