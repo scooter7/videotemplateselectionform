@@ -229,47 +229,34 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     st.error(f"Error generating {channel} content: {e}")
     return generated_content
 
-def main():
-    st.title("AI Script Generator from Google Sheets and Templates")
-    st.markdown("---")
+if st.button("Generate Content"):
+    generated_contents = []
+    for idx, row in sheet_data.iterrows():
+        if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+            st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
+            continue
+        template_structure = extract_template_structure(row['Selected-Template'], examples_data)
+        if template_structure is None:
+            continue
+        prompt, job_id = build_template_prompt(row, template_structure)
 
-    sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
-    examples_data = load_examples()
+        if not prompt or not job_id:
+            continue
 
-    if sheet_data.empty or examples_data.empty:
-        st.error("No data available from Google Sheets or Templates CSV.")
-        return
+        generated_content = generate_content_with_retry(prompt, job_id)  # Use generate_content_with_retry instead
+        if generated_content:
+            generated_contents.append(generated_content)
 
-    st.dataframe(sheet_data)
+    full_content = "\n\n".join(generated_contents)
+    st.session_state['full_content'] = full_content
+    st.text_area("Generated Content", full_content, height=300)
 
-    if st.button("Generate Content"):
-        generated_contents = []
-        for idx, row in sheet_data.iterrows():
-            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
-                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
-                continue
-            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
-            if template_structure is None:
-                continue
-            prompt, job_id = build_template_prompt(row, template_structure)
-
-            if not prompt or not job_id:
-                continue
-
-            generated_content = generate_content(prompt, job_id)
-            if generated_content:
-                generated_contents.append(generated_content)
-
-        full_content = "\n\n".join(generated_contents)
-        st.session_state['full_content'] = full_content
-        st.text_area("Generated Content", full_content, height=300)
-
-        st.download_button(
-            label="Download Generated Content",
-            data=full_content,
-            file_name="generated_content.txt",
-            mime="text/plain"
-        )
+    st.download_button(
+        label="Download Generated Content",
+        data=full_content,
+        file_name="generated_content.txt",
+        mime="text/plain"
+    )
 
     st.markdown("---")
     st.header("Generate Social Media Posts")
