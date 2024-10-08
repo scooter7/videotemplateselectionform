@@ -172,30 +172,35 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-def generate_content(prompt, job_id):
-    try:
-        # Use the format that worked for Anthropic
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20240620",  # Use the Claude model
-            max_tokens=1000,
-            temperature=0.7,
-            messages=[{"role": "user", "content": prompt}]
-        )
+import time
 
-        # Extract the completion text from the 'content' field of the message
-        if message.content and len(message.content) > 0:
-            content = message.content[0].text
-        else:
-            content = "No content generated."
+def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
+    for i in range(retries):
+        try:
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20240620",  # Use the Claude model
+                max_tokens=1000,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            if message.content and len(message.content) > 0:
+                content = message.content[0].text
+            else:
+                content = "No content generated."
 
-        content_clean = clean_text(content)
+            content_clean = clean_text(content)
+            return f"Job ID {job_id}:\n\n{content_clean}"
+        
+        except anthropic.APIError as e:
+            if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                time.sleep(delay)
+            else:
+                st.error(f"Error generating content: {e}")
+                return None
 
-        return f"Job ID {job_id}:\n\n{content_clean}"
-    except Exception as e:
-        st.error(f"Error generating content: {e}")
-        return None
-
-def generate_social_content(main_content, selected_channels):
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
         "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
@@ -203,18 +208,26 @@ def generate_social_content(main_content, selected_channels):
     }
     generated_content = {}
     for channel in selected_channels:
-        try:
-            prompt = social_prompts[channel]
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=500,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            if message.content and len(message.content) > 0:
-                generated_content[channel] = message.content[0].text
-        except Exception as e:
-            st.error(f"Error generating {channel} content: {e}")
+        for i in range(retries):
+            try:
+                prompt = social_prompts[channel]
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20240620",
+                    max_tokens=500,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                if message.content and len(message.content) > 0:
+                    generated_content[channel] = message.content[0].text
+                break  # Break the retry loop if successful
+            
+            except anthropic.APIError as e:
+                if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                    time.sleep(delay)
+                else:
+                    st.error(f"Error generating {channel} content: {e}")
     return generated_content
 
 def main():
