@@ -289,16 +289,34 @@ def main():
             social_content = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
             st.session_state['social_content'] = social_content
 
-    if 'social_content' in st.session_state:
-        for channel, content in st.session_state['social_content'].items():
-            st.subheader(f"{channel.capitalize()} Post")
-            st.text_area(f"{channel.capitalize()} Content", content, height=200)
-            st.download_button(
-                label=f"Download {channel.capitalize()} Content",
-                data=content,
-                file_name=f"{channel}_post.txt",
-                mime="text/plain"
-            )
+    if selected_channels and 'full_content' in st.session_state:
+    if st.button("Generate Social Media Content"):
+        social_media_contents = []
+        for idx, row in sheet_data.iterrows():
+            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
+                continue
+            
+            # Generate content for this row
+            if 'full_content' in st.session_state:
+                social_content_for_row = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
+                
+                if social_content_for_row:
+                    social_media_contents.append(social_content_for_row)
+        
+        # Display the social media content for each channel
+        if social_media_contents:
+            st.session_state['social_content'] = social_media_contents
+            for social_content in social_media_contents:
+                for channel, content in social_content.items():
+                    st.subheader(f"{channel.capitalize()} Post")
+                    st.text_area(f"{channel.capitalize()} Content", content, height=200)
+                    st.download_button(
+                        label=f"Download {channel.capitalize()} Content",
+                        data=content,
+                        file_name=f"{channel}_post.txt",
+                        mime="text/plain"
+                    )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
