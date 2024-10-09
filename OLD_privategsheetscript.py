@@ -126,11 +126,8 @@ def extract_template_structure(selected_template, examples_data):
     return template_structure
 
 def enforce_character_limit(content, max_chars):
-    # We are relaxing the limits here; truncate only if it greatly exceeds the character limit
-    # Allow some extra length for full, meaningful phrases
     relaxed_limit = max_chars + 20  # Relax the limit by 20 characters
     if len(content) > relaxed_limit:
-        # Try to truncate at the last space before the relaxed limit to avoid breaking words
         truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
         if not truncated_content:  # If truncating removes all content, fallback to strict character limit cut
             return content[:max_chars].rstrip() + "..."
@@ -152,19 +149,14 @@ def build_template_prompt(sheet_row, template_structure):
     umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-
-        # Generate umbrella sections first
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
             prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
-        
-        # Subsections must strictly extract content from umbrella sections in order
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
                 prompt += f"Section {section_name}: Extract a **distinct, verbatim part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and **no new content is introduced**.\n"
 
-    # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
@@ -232,14 +224,24 @@ def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    sheet_data = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
-    examples_data = load_examples()
+    # Load data only if not already stored in session_state
+    if 'sheet_data' not in st.session_state:
+        st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+    if 'examples_data' not in st.session_state:
+        st.session_state['examples_data'] = load_examples()
+
+    sheet_data = st.session_state['sheet_data']
+    examples_data = st.session_state['examples_data']
 
     if sheet_data.empty or examples_data.empty:
         st.error("No data available from Google Sheets or Templates CSV.")
         return
 
     st.dataframe(sheet_data)
+
+    # Ensure session state management for content generation
+    if 'generated_contents' not in st.session_state:
+        st.session_state['generated_contents'] = []
 
     if st.button("Generate Content"):
         generated_contents = []
@@ -259,8 +261,8 @@ def main():
             if generated_content:
                 generated_contents.append(generated_content)
 
+        st.session_state['generated_contents'] = generated_contents
         full_content = "\n\n".join(generated_contents)
-        st.session_state['full_content'] = full_content
         st.text_area("Generated Content", full_content, height=300)
 
         st.download_button(
@@ -272,10 +274,16 @@ def main():
 
     st.markdown("---")
     st.header("Generate Social Media Posts")
-    facebook = st.checkbox("Facebook")
-    linkedin = st.checkbox("LinkedIn")
-    instagram = st.checkbox("Instagram")
+    
+    # Checkbox management with session state
+    if 'selected_channels' not in st.session_state:
+        st.session_state['selected_channels'] = []
 
+    facebook = st.checkbox("Facebook", value="facebook" in st.session_state['selected_channels'])
+    linkedin = st.checkbox("LinkedIn", value="linkedin" in st.session_state['selected_channels'])
+    instagram = st.checkbox("Instagram", value="instagram" in st.session_state['selected_channels'])
+
+    # Update session state based on checkbox selection
     selected_channels = []
     if facebook:
         selected_channels.append("facebook")
@@ -283,22 +291,39 @@ def main():
         selected_channels.append("linkedin")
     if instagram:
         selected_channels.append("instagram")
+    
+    st.session_state['selected_channels'] = selected_channels
 
-    if selected_channels and 'full_content' in st.session_state:
+    if selected_channels and 'generated_contents' in st.session_state:
+        # Ensure session state management for social content
+        if 'social_media_contents' not in st.session_state:
+            st.session_state['social_media_contents'] = []
+
         if st.button("Generate Social Media Content"):
-            social_content = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
-            st.session_state['social_content'] = social_content
+            social_media_contents = []
+            for idx, generated_content in enumerate(st.session_state['generated_contents']):
+                # Generate social content based on the specific row's generated content
+                social_content_for_row = generate_social_content_with_retry(generated_content, selected_channels)
 
-    if 'social_content' in st.session_state:
-        for channel, content in st.session_state['social_content'].items():
-            st.subheader(f"{channel.capitalize()} Post")
-            st.text_area(f"{channel.capitalize()} Content", content, height=200)
-            st.download_button(
-                label=f"Download {channel.capitalize()} Content",
-                data=content,
-                file_name=f"{channel}_post.txt",
-                mime="text/plain"
-            )
+                if social_content_for_row:
+                    social_media_contents.append(social_content_for_row)
+            
+            st.session_state['social_media_contents'] = social_media_contents
+
+    # Display the social media content for each channel and row
+    if 'social_media_contents' in st.session_state:
+        for idx, social_content in enumerate(st.session_state['social_media_contents']):
+            st.subheader(f"Generated Social Media Content for Row {idx + 1}")
+            for channel, content in social_content.items():
+                st.subheader(f"{channel.capitalize()} Post")
+                st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content_{idx}")
+                st.download_button(
+                    label=f"Download {channel.capitalize()} Content",
+                    data=content,
+                    file_name=f"{channel}_post_row{idx + 1}.txt",
+                    mime="text/plain",
+                    key=f"download_{channel}_row_{idx}"
+                )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
