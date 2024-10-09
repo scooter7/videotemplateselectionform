@@ -252,7 +252,7 @@ def main():
                 generated_contents.append(generated_content)
 
         full_content = "\n\n".join(generated_contents)
-        st.session_state['full_content'] = full_content
+        st.session_state['generated_contents'] = generated_contents
         st.text_area("Generated Content", full_content, height=300)
 
         st.download_button(
@@ -276,15 +276,11 @@ def main():
     if instagram:
         selected_channels.append("instagram")
 
-    if selected_channels and 'full_content' in st.session_state:
+    if selected_channels and 'generated_contents' in st.session_state:
         if st.button("Generate Social Media Content"):
             social_media_contents = []
-            for idx, row in sheet_data.iterrows():
-                if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
-                    st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
-                    continue
-
-                generated_content = st.session_state['full_content'].split("\n\n")[idx]
+            for idx, generated_content in enumerate(st.session_state['generated_contents']):
+                # Generate social content based on the specific row's generated content
                 social_content_for_row = generate_social_content_with_retry(generated_content, selected_channels)
 
                 if social_content_for_row:
@@ -310,4 +306,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
