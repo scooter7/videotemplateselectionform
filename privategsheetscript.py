@@ -126,11 +126,8 @@ def extract_template_structure(selected_template, examples_data):
     return template_structure
 
 def enforce_character_limit(content, max_chars):
-    # We are relaxing the limits here; truncate only if it greatly exceeds the character limit
-    # Allow some extra length for full, meaningful phrases
     relaxed_limit = max_chars + 20  # Relax the limit by 20 characters
     if len(content) > relaxed_limit:
-        # Try to truncate at the last space before the relaxed limit to avoid breaking words
         truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
         if not truncated_content:  # If truncating removes all content, fallback to strict character limit cut
             return content[:max_chars].rstrip() + "..."
@@ -152,19 +149,14 @@ def build_template_prompt(sheet_row, template_structure):
     umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-
-        # Generate umbrella sections first
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
             prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
-        
-        # Subsections must strictly extract content from umbrella sections in order
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
                 prompt += f"Section {section_name}: Extract a **distinct, verbatim part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and **no new content is introduced**.\n"
 
-    # Add CTA-Text explicitly if it exists
     if 'CTA-Text' in [section for section, _ in template_structure]:
         prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
@@ -286,37 +278,32 @@ def main():
 
     if selected_channels and 'full_content' in st.session_state:
         if st.button("Generate Social Media Content"):
-            social_content = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
-            st.session_state['social_content'] = social_content
-
-    if selected_channels and 'full_content' in st.session_state:
-    if st.button("Generate Social Media Content"):
-        social_media_contents = []
-        for idx, row in sheet_data.iterrows():
-            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
-                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
-                continue
-            
-            # Generate content for this row
-            if 'full_content' in st.session_state:
-                social_content_for_row = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
+            social_media_contents = []
+            for idx, row in sheet_data.iterrows():
+                if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+                    st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
+                    continue
                 
-                if social_content_for_row:
-                    social_media_contents.append(social_content_for_row)
-        
-        # Display the social media content for each channel
-        if social_media_contents:
-            st.session_state['social_content'] = social_media_contents
-            for social_content in social_media_contents:
-                for channel, content in social_content.items():
-                    st.subheader(f"{channel.capitalize()} Post")
-                    st.text_area(f"{channel.capitalize()} Content", content, height=200)
-                    st.download_button(
-                        label=f"Download {channel.capitalize()} Content",
-                        data=content,
-                        file_name=f"{channel}_post.txt",
-                        mime="text/plain"
-                    )
+                # Generate content for this row
+                if 'full_content' in st.session_state:
+                    social_content_for_row = generate_social_content_with_retry(st.session_state['full_content'], selected_channels)
+                    
+                    if social_content_for_row:
+                        social_media_contents.append(social_content_for_row)
+            
+            # Display the social media content for each channel
+            if social_media_contents:
+                st.session_state['social_content'] = social_media_contents
+                for social_content in social_media_contents:
+                    for channel, content in social_content.items():
+                        st.subheader(f"{channel.capitalize()} Post")
+                        st.text_area(f"{channel.capitalize()} Content", content, height=200)
+                        st.download_button(
+                            label=f"Download {channel.capitalize()} Content",
+                            data=content,
+                            file_name=f"{channel}_post.txt",
+                            mime="text/plain"
+                        )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
