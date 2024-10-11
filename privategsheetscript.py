@@ -108,7 +108,7 @@ def extract_template_structure(selected_template, examples_data):
 
 # Build template-based prompt for content generation
 def build_template_prompt(sheet_row, template_structure):
-    job_id = sheet_row['job id']  # Ensure matching column name with lowercase
+    job_id = sheet_row['job-id']  # Use 'job-id' (with a hyphen)
     topic_description = sheet_row['topic-description']  # Ensure matching column name with lowercase
 
     if not (job_id and topic_description and template_structure):
@@ -274,7 +274,7 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+            if not (row['Job-ID'] and row['Selected-Template'] and row['Topic-Description']):  # Use 'Job-ID'
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
 
@@ -359,7 +359,7 @@ def main():
     
     if st.button("Update Google Sheet"):
         for idx, generated_content in enumerate(st.session_state['generated_contents']):
-            job_id = sheet_data.loc[idx, 'Job ID']
+            job_id = sheet_data.loc[idx, 'Job-ID']  # Fix column name here
             social_media_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state else {}
 
             update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
