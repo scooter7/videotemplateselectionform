@@ -160,6 +160,7 @@ def clean_text(text):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
+            # Attempt to generate content with the API
             message = client.messages.create(
                 model="claude-3-5-sonnet-20240620",  # Use the Claude model
                 max_tokens=1000,
@@ -176,12 +177,15 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
             return f"Job ID {job_id}:\n\n{content_clean}"
         
         except anthropic.APIError as e:
-            if e.error.get('type') == 'overloaded_error' and i < retries - 1:
-                st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                time.sleep(delay)
-            else:
-                st.error(f"Error generating content: {e}")
-                return None
+            # Log the error message and retry after a delay
+            st.warning(f"API Error occurred: {str(e)}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+            time.sleep(delay)
+        except Exception as e:
+            # Handle any other exception and log it
+            st.error(f"An unexpected error occurred: {str(e)}")
+            break  # Stop retrying if any other exception occurs
+
+    return None  # Return None if all retries fail
 
 # Generate social media content with retry
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
