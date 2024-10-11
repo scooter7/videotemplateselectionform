@@ -108,8 +108,8 @@ def extract_template_structure(selected_template, examples_data):
 
 # Build template-based prompt for content generation
 def build_template_prompt(sheet_row, template_structure):
-    job_id = sheet_row['job-id']  # Use 'job-id' (with a hyphen)
-    topic_description = sheet_row['topic-description']  # Ensure matching column name with lowercase
+    job_id = sheet_row['Job ID']  # Accessing 'Job ID' from the requests sheet
+    topic_description = sheet_row['Topic-Description']  # Ensure matching column name with the requests sheet
 
     if not (job_id and topic_description and template_structure):
         return None, None
@@ -222,9 +222,9 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         sheet = gc.open_by_key(sheet_id).sheet1
         rows = sheet.get_all_values()
 
-        # Find the row that matches the Job ID
+        # Find the row that matches the Job ID in the target sheet ('Job-ID')
         for i, row in enumerate(rows):
-            if row[1].strip().lower() == job_id.strip().lower():  # Assuming Job ID is in column B
+            if row[1].strip().lower() == job_id.strip().lower():  # Assuming Job-ID is in column B
                 row_index = i + 1  # Sheet rows are 1-indexed
 
                 # Update the relevant columns (H-BS for text content)
@@ -274,7 +274,7 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            if not (row['Job-ID'] and row['Selected-Template'] and row['Topic-Description']):  # Use 'Job-ID'
+            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):  # Use 'Job ID' from the requests sheet
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
 
@@ -359,7 +359,7 @@ def main():
     
     if st.button("Update Google Sheet"):
         for idx, generated_content in enumerate(st.session_state['generated_contents']):
-            job_id = sheet_data.loc[idx, 'Job-ID']  # Fix column name here
+            job_id = sheet_data.loc[idx, 'Job ID']  # From the requests sheet
             social_media_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state else {}
 
             update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
