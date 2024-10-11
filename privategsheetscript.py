@@ -74,24 +74,8 @@ def load_google_sheet(sheet_id):
         sheet = gc.open_by_key(sheet_id).sheet1
         data = pd.DataFrame(sheet.get_all_records())
 
-        # Log the retrieved headers for debugging purposes
-        st.write("Headers from Google Sheet:", list(data.columns))
-
         # Normalize headers to lowercase and strip leading/trailing spaces
         data.columns = [col.lower().strip() for col in data.columns]
-
-        # Log the normalized headers
-        st.write("Normalized Headers:", list(data.columns))
-
-        # Check for duplicate headers
-        headers = list(data.columns)
-        if len(headers) != len(set(headers)):
-            st.error("The header row in the worksheet is not unique. Please ensure all column names are unique.")
-            st.write("Duplicate headers found:", [col for col in headers if headers.count(col) > 1])
-            return pd.DataFrame()
-
-        # Log full data for further inspection
-        st.write("Full Data Retrieved from Google Sheet:", data)
 
         return data
     except gspread.SpreadsheetNotFound:
@@ -252,17 +236,17 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
     gc = gspread.authorize(credentials)
     
     try:
-        # Open the target sheet
+        # Open the target sheet (this is now the second sheet to populate)
         sheet = gc.open_by_key(sheet_id).sheet1
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Ensure headers are normalized and check for the matching job ID
+        # Normalize headers and find the matching Job ID row
         df.columns = [col.lower().strip() for col in df.columns]
         matching_row = df[df['job id'] == job_id.lower()]
         
         if matching_row.empty:
-            st.error(f"No matching Job ID found for '{job_id}'.")
+            st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
             return
         
         row_index = matching_row.index[0] + 2  # Google Sheets rows are 1-indexed, plus 1 for header row
@@ -396,7 +380,7 @@ def main():
     st.markdown("---")
     st.header("Update Google Sheet with Generated Content")
     
-    # Input for Google Sheet ID
+    # Input for Google Sheet ID (for the second sheet where content is populated)
     sheet_id = st.text_input("Enter the target Google Sheet ID", "1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8")
     
     if st.button("Update Google Sheet"):
