@@ -83,8 +83,8 @@ def load_google_sheet(sheet_id):
 
 # Extract the template structure from examples
 def extract_template_structure(selected_template, examples_data):
-    # Debugging: Print column names to check the actual names in the DataFrame
-    st.write("Columns in examples_data:", examples_data.columns)
+    # Debugging: Remove the print statement now that we know the correct column name
+    # st.write("Columns in examples_data:", examples_data.columns)
     
     if "template_SH_" in selected_template:
         try:
@@ -95,8 +95,8 @@ def extract_template_structure(selected_template, examples_data):
     else:
         template_number_str = "01"
 
-    # Try accessing the correct column
-    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
+    # Use 'Selected-Template' instead of 'Template'
+    example_row = examples_data[examples_data['Selected-Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
         return None
