@@ -220,6 +220,45 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     st.error(f"Error generating {channel} content: {e}")
     return generated_content
 
+# New Functionality: Update Google Sheet with Generated Content
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content):
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    
+    try:
+        # Open the target sheet
+        sheet = gc.open_by_key(sheet_id).sheet1
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        # Find the matching row for the Job ID
+        matching_row = df[df['Job ID'] == job_id]
+        if matching_row.empty:
+            st.error(f"No matching Job ID found for '{job_id}'.")
+            return
+        
+        row_index = matching_row.index[0] + 2  # Google Sheets rows are 1-indexed, plus 1 for header row
+
+        # Update the relevant columns
+        for idx, content in enumerate(generated_content):
+            column_letter = chr(72 + idx)  # Columns H to BS for text content
+            sheet.update_acell(f'{column_letter}{row_index}', content)
+
+        # Update the social media columns
+        social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]  # Adjust based on exact columns in your sheet
+        for idx, (channel, social_content) in enumerate(social_media_content.items()):
+            column_letter = social_media_columns[idx]
+            sheet.update_acell(f'{column_letter}{row_index}', social_content)
+
+        st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
+
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+    except Exception as e:
+        st.error(f"An error occurred while updating the Google Sheet: {e}")
+
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
@@ -324,6 +363,21 @@ def main():
                     mime="text/plain",
                     key=f"download_{channel}_row_{idx}"
                 )
+
+    # New section: Update Google Sheet
+    st.markdown("---")
+    st.header("Update Google Sheet with Generated Content")
+    
+    # Input for Google Sheet ID
+    sheet_id = st.text_input("Enter the target Google Sheet ID", "1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8")
+    
+    if st.button("Update Google Sheet"):
+        for idx, generated_content in enumerate(st.session_state['generated_contents']):
+            job_id = sheet_data.loc[idx, 'Job ID']
+            social_media_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state else {}
+
+            # Update Google Sheet
+            update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
