@@ -160,12 +160,15 @@ def clean_text(text):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
+            # Debugging: Print the prompt to ensure it is correctly formatted
+            st.write(f"Debug - Prompt being sent for Job ID {job_id}: {prompt}")
+            
             # Ensure the prompt is passed as a valid list of dictionaries
             message = client.messages.create(
                 model="claude-3-5-sonnet-20240620",  # Use the Claude model
                 max_tokens=1000,
                 temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]  # Correctly wrap prompt
+                messages=[{"role": "user", "content": prompt}]  # Correct structure
             )
             
             if message.content and len(message.content) > 0:
@@ -177,7 +180,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
             return f"Job ID {job_id}:\n\n{content_clean}"
         
         except anthropic.APIError as e:
-            # Log the error message and retry after a delay
+            # Log the full error message for debugging purposes
             st.warning(f"API Error occurred: {str(e)}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
             time.sleep(delay)
         except Exception as e:
