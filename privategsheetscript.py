@@ -3,6 +3,7 @@ import re
 import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
+import pandas as pd
 import time
 
 # Initialize the Anthropic client
@@ -63,7 +64,7 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
-# Function to load the Google Sheet
+# Load Google Sheet data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -72,14 +73,69 @@ def load_google_sheet(sheet_id):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
         data = sheet.get_all_records()
-
-        return data
+        return pd.DataFrame(data)
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return []
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"An error occurred while loading the Google Sheet: {e}")
-        return []
+        return pd.DataFrame()
+
+# Extract the template structure from examples
+def extract_template_structure(selected_template, examples_data):
+    if "template_SH_" in selected_template:
+        try:
+            template_number = int(selected_template.split('_')[-1])
+            template_number_str = f"{template_number:02d}"
+        except ValueError:
+            template_number_str = "01"
+    else:
+        template_number_str = "01"
+
+    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
+    
+    if example_row.empty:
+        return None
+
+    template_structure = []
+    for col in possible_columns:
+        if col in example_row.columns:
+            text_element = example_row[col].values[0]
+            if pd.notna(text_element):
+                template_structure.append((col, text_element))
+
+    return template_structure
+
+# Build template-based prompt for content generation
+def build_template_prompt(sheet_row, template_structure):
+    job_id = sheet_row['job id']  # Ensure matching column name with lowercase
+    topic_description = sheet_row['topic-description']  # Ensure matching column name with lowercase
+
+    if not (job_id and topic_description and template_structure):
+        return None, None
+
+    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given, ensuring that the content of the umbrella sections is divided **verbatim** into subsections.\n\n"
+    
+    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
+    prompt += "For each section, generate content **in strict order**. Subsections must split the umbrella section **verbatim** into distinct, meaningful parts. **Do not reorder sections or introduce new content**:\n\n"
+
+    umbrella_sections = {}
+    for section_name, content in template_structure:
+        max_chars = len(content)
+        if '-' not in section_name:
+            umbrella_sections[section_name] = section_name
+            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"Section {section_name}: Extract a **distinct, verbatim part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and **no new content is introduced**.\n"
+
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    prompt += "\nStrictly generate content for every section, ensuring subsections extract distinct, verbatim parts from the umbrella content in proper order."
+
+    return prompt, job_id
 
 # Clean text by removing unnecessary characters
 def clean_text(text):
@@ -96,6 +152,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Retry generating content with API
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -122,6 +179,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
+# Generate social media content with retry
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
@@ -176,7 +234,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                     time.sleep(1)  # Add a delay to avoid rate limits
 
                 # Update the social media columns (BU-BZ for social media content)
-                social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]  # Adjust based on exact columns in your sheet
+                social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]
                 for idx, (channel, social_content) in enumerate(social_media_content.items()):
                     column_letter = social_media_columns[idx]
                     sheet.update_acell(f'{column_letter}{row_index}', social_content)
@@ -202,7 +260,8 @@ def main():
 
     sheet_data = st.session_state['sheet_data']
 
-    if not sheet_data:
+    # Fix: Correctly checking if the DataFrame is empty
+    if sheet_data.empty:
         st.error("No data available from the Google Sheet.")
         return
 
@@ -214,13 +273,16 @@ def main():
 
     if st.button("Generate Content"):
         generated_contents = []
-        for idx, row in enumerate(sheet_data):
+        for idx, row in sheet_data.iterrows():
             if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
 
-            # Assuming a valid template structure was built previously
-            prompt, job_id = "Your template prompt here", row['Job ID']  # Simulate your build_template_prompt function
+            template_structure = extract_template_structure(row['Selected-Template'], sheet_data)
+            if template_structure is None:
+                continue
+
+            prompt, job_id = build_template_prompt(row, template_structure)
 
             generated_content = generate_content_with_retry(prompt, job_id)
             if generated_content:
@@ -267,9 +329,7 @@ def main():
         if st.button("Generate Social Media Content"):
             social_media_contents = []
             for idx, generated_content in enumerate(st.session_state['generated_contents']):
-                # Generate social content based on the specific row's generated content
                 social_content_for_row = generate_social_content_with_retry(generated_content, selected_channels)
-
                 if social_content_for_row:
                     social_media_contents.append(social_content_for_row)
             
@@ -294,15 +354,14 @@ def main():
     st.markdown("---")
     st.header("Update Google Sheet with Generated Content")
     
-    # Input for Google Sheet ID (for the second sheet where content is populated)
+    # Input for Google Sheet ID
     sheet_id = st.text_input("Enter the target Google Sheet ID", "1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8")
     
     if st.button("Update Google Sheet"):
         for idx, generated_content in enumerate(st.session_state['generated_contents']):
-            job_id = sheet_data[idx]['Job ID']
+            job_id = sheet_data.loc[idx, 'Job ID']
             social_media_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state else {}
 
-            # Update Google Sheet
             update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
 
     st.markdown('</div>', unsafe_allow_html=True)
