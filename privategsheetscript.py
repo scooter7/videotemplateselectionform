@@ -160,12 +160,12 @@ def clean_text(text):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            # Attempt to generate content with the API
+            # Ensure the prompt is passed as a valid list of dictionaries
             message = client.messages.create(
                 model="claude-3-5-sonnet-20240620",  # Use the Claude model
                 max_tokens=1000,
                 temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}]  # Correctly wrap prompt
             )
             
             if message.content and len(message.content) > 0:
