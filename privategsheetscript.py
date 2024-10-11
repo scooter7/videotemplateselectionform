@@ -74,14 +74,24 @@ def load_google_sheet(sheet_id):
         sheet = gc.open_by_key(sheet_id).sheet1
         data = pd.DataFrame(sheet.get_all_records())
 
+        # Log the retrieved headers for debugging purposes
+        st.write("Headers from Google Sheet:", list(data.columns))
+
         # Normalize headers to lowercase and strip leading/trailing spaces
         data.columns = [col.lower().strip() for col in data.columns]
+
+        # Log the normalized headers
+        st.write("Normalized Headers:", list(data.columns))
 
         # Check for duplicate headers
         headers = list(data.columns)
         if len(headers) != len(set(headers)):
             st.error("The header row in the worksheet is not unique. Please ensure all column names are unique.")
+            st.write("Duplicate headers found:", [col for col in headers if headers.count(col) > 1])
             return pd.DataFrame()
+
+        # Log full data for further inspection
+        st.write("Full Data Retrieved from Google Sheet:", data)
 
         return data
     except gspread.SpreadsheetNotFound:
