@@ -64,6 +64,7 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
+# Function to load the Google Sheet and check for potential header issues
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -72,9 +73,22 @@ def load_google_sheet(sheet_id):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
         data = pd.DataFrame(sheet.get_all_records())
+
+        # Normalize headers to lowercase and strip leading/trailing spaces
+        data.columns = [col.lower().strip() for col in data.columns]
+
+        # Check for duplicate headers
+        headers = list(data.columns)
+        if len(headers) != len(set(headers)):
+            st.error("The header row in the worksheet is not unique. Please ensure all column names are unique.")
+            return pd.DataFrame()
+
         return data
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"An error occurred while loading the Google Sheet: {e}")
         return pd.DataFrame()
 
 @st.cache_data
@@ -135,8 +149,8 @@ def enforce_character_limit(content, max_chars):
     return content
 
 def build_template_prompt(sheet_row, template_structure):
-    job_id = sheet_row['Job ID']
-    topic_description = sheet_row['Topic-Description']
+    job_id = sheet_row['job id']  # Ensure matching column name with lowercase
+    topic_description = sheet_row['topic-description']  # Ensure matching column name with lowercase
 
     if not (job_id and topic_description and template_structure):
         return None, None
@@ -233,24 +247,28 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Find the matching row for the Job ID
-        matching_row = df[df['Job ID'] == job_id]
+        # Ensure headers are normalized and check for the matching job ID
+        df.columns = [col.lower().strip() for col in df.columns]
+        matching_row = df[df['job id'] == job_id.lower()]
+        
         if matching_row.empty:
             st.error(f"No matching Job ID found for '{job_id}'.")
             return
         
         row_index = matching_row.index[0] + 2  # Google Sheets rows are 1-indexed, plus 1 for header row
 
-        # Update the relevant columns
+        # Update the relevant columns (H-BS for text content)
         for idx, content in enumerate(generated_content):
             column_letter = chr(72 + idx)  # Columns H to BS for text content
             sheet.update_acell(f'{column_letter}{row_index}', content)
+            time.sleep(1)  # Add a delay to avoid rate limits
 
-        # Update the social media columns
+        # Update the social media columns (BU-BZ for social media content)
         social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]  # Adjust based on exact columns in your sheet
         for idx, (channel, social_content) in enumerate(social_media_content.items()):
             column_letter = social_media_columns[idx]
             sheet.update_acell(f'{column_letter}{row_index}', social_content)
+            time.sleep(1)  # Add a delay to avoid rate limits
 
         st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
 
@@ -285,10 +303,10 @@ def main():
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
-            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+            if not (row['job id'] and row['selected-template'] and row['topic-description']):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
-            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
+            template_structure = extract_template_structure(row['selected-template'], examples_data)
             if template_structure is None:
                 continue
             prompt, job_id = build_template_prompt(row, template_structure)
@@ -373,7 +391,7 @@ def main():
     
     if st.button("Update Google Sheet"):
         for idx, generated_content in enumerate(st.session_state['generated_contents']):
-            job_id = sheet_data.loc[idx, 'Job ID']
+            job_id = sheet_data.loc[idx, 'job id']
             social_media_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state else {}
 
             # Update Google Sheet
