@@ -10,43 +10,6 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-st.markdown(
-    """
-    <style>
-    .st-emotion-cache-12fmjuu.ezrtsby2 {
-        display: none;
-    }
-    .logo-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .logo-container img {
-        width: 600px;
-    }
-    .app-container {
-        border-left: 5px solid #58258b;
-        border-right: 5px solid #58258b;
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
-        color: #42145f;
-    }
-    .stButton button {
-        background-color: #fec923;
-        color: #42145f;
-    }
-    .stButton button:hover {
-        background-color: #42145f;
-        color: #fec923;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # Helper function to clean Job IDs
 def clean_job_id(job_id):
     if not job_id:
@@ -94,7 +57,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Extract template structure based on the selected template
+# Extract template structure from the examples CSV
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -118,7 +81,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-# Build prompt for content generation based on template
+# Build prompt for content generation based on the template structure
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -127,16 +90,16 @@ def build_template_prompt(sheet_row, template_structure):
         return None, None
 
     prompt = f"Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
-    prompt += "For each section, generate content in strict order according to the following structure. Ensure you stay within the given character limits:\n\n"
+    prompt += "Follow the template structure strictly. Each section should be generated in the exact order and divided into subsections as follows:\n\n"
 
     for section_name, content in template_structure:
         max_chars = len(content)
-        prompt += f"{section_name}: {max_chars} characters limit.\n"
+        prompt += f"{section_name}: Limit to {max_chars} characters.\n"
 
     return prompt, job_id
 
-# Retry function for content generation
-def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
+# Generate main content with retries
+def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
     for i in range(retries):
         try:
             message = client.messages.create(
@@ -152,12 +115,18 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            return {
-                "Text01": content_clean[:100],
-                "Text01-1": content_clean[100:200],
-                "Text02": content_clean[200:300],
-                "Text02-1": content_clean[300:]
-            }
+
+            # Split the generated content into sections based on the template structure
+            generated_content = {}
+            content_lines = content_clean.split("\n")
+
+            for idx, (section_name, section_template) in enumerate(template_structure):
+                if idx < len(content_lines):
+                    generated_content[section_name] = content_lines[idx].strip()
+                else:
+                    generated_content[section_name] = ""
+
+            return generated_content
         
         except anthropic.APIError as e:
             st.warning(f"Error generating content for Job ID {job_id}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
@@ -165,7 +134,8 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 
     return None
 
-# Retry function for social media content generation
+
+# Generate social media content based on the main content
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
@@ -193,6 +163,33 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     
     return generated_content
 
+# Map content to specific cells in the Google Sheet based on the template
+def map_generated_content_to_cells(generated_content):
+    """Map each section to its corresponding cell in the Google Sheet."""
+    mapping = {
+        # Mapping for Text01 and its variants
+        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
+        
+        # Mapping for Text02 and its variants
+        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
+        
+        # Mapping for Text03 and its variants
+        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
+        
+        # Mapping for Text04 and its variants
+        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
+        
+        # Mapping for Text05 and its variants
+        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
+        
+        # CTA and other content
+        "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
+    }
+
+    # Extract the mapped content based on the predefined mapping
+    mapped_content = {mapping[key]: value for key, value in generated_content.items() if key in mapping}
+    return mapped_content
+
 # Update Google Sheet with generated content and social media content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
@@ -214,12 +211,14 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
-                # Update content in relevant columns
-                sheet.update_acell(f'H{row_index}', generated_content.get('Text01', ''))  # Column H
-                sheet.update_acell(f'I{row_index}', generated_content.get('Text01-1', ''))  # Column I
-                sheet.update_acell(f'N{row_index}', generated_content.get('Text02', ''))  # Column N
-                sheet.update_acell(f'O{row_index}', generated_content.get('Text02-1', ''))  # Column O
-                time.sleep(1)
+                # Map the generated content to the correct sections
+                if generated_content:
+                    mapped_content = map_generated_content_to_cells(generated_content)
+                    
+                    # Update the corresponding cells with the mapped content
+                    for col_letter, content in mapped_content.items():
+                        sheet.update_acell(f'{col_letter}{row_index}', content)
+                        time.sleep(1)
 
                 # Update social media content if present
                 if social_media_content:
@@ -297,7 +296,7 @@ def main():
                 st.warning(f"Could not build prompt for Job ID {job_id}. Skipping this row.")
                 continue
 
-            generated_content = generate_content_with_retry(prompt, job_id)
+            generated_content = generate_content_with_retry(prompt, job_id, template_structure)
 
             if generated_content:
                 social_media_content = generate_social_content_with_retry(generated_content['Text01'], selected_channels)
