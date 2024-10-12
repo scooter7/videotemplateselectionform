@@ -205,7 +205,8 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
 
         # Find the row that matches the Job ID
         for i, row in enumerate(rows):
-            job_id_in_sheet = row[1].strip().lower()  # Assuming Job ID is in column B
+            job_id_in_sheet = row[1].strip().lower()  # Assuming Job-ID is in column B
+            st.write(f"Comparing Job-ID in target sheet: {job_id_in_sheet} with source Job-ID: {job_id_normalized}")
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
@@ -215,10 +216,10 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                     sheet.update_acell(f'{column_letter}{row_index}', content)
                     time.sleep(1)
 
-                # Update social media content in columns BU-BZ
-                social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]
+                # Update social media content in columns LinkedIn-Post-Content-Reco, etc.
+                social_media_columns = ["LinkedIn-Post-Content-Reco", "Facebook-Post-Content-Reco", "Instagram-Post-Content-Reco", "YouTube-Post-Content-Reco", "Blog-Post-Content-Reco", "Email-Post-Content-Reco"]
                 for idx, (channel, social_content) in enumerate(social_media_content.items()):
-                    column_letter = social_media_columns[idx]
+                    column_letter = chr(72 + idx)
                     sheet.update_acell(f'{column_letter}{row_index}', social_content)
                     time.sleep(1)
 
@@ -231,8 +232,6 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
     except Exception as e:
         st.error(f"An error occurred while updating the Google Sheet: {e}")
-
-# Main function remains the same as previous.
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
