@@ -10,6 +10,16 @@ import time
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
+# Define possible columns based on template structure
+possible_columns = [
+    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
+    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
+    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
+    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
+    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
+    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
+]
+
 # Function to load Google Sheet data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -189,10 +199,6 @@ def main():
 
     st.dataframe(sheet_data)
 
-    # Ensure session state management for content generation
-    if 'generated_contents' not in st.session_state:
-        st.session_state['generated_contents'] = []
-
     if st.button("Generate Content"):
         generated_contents = []
         for idx, row in sheet_data.iterrows():
@@ -221,59 +227,6 @@ def main():
             file_name="generated_content.txt",
             mime="text/plain"
         )
-
-    st.markdown("---")
-    st.header("Generate Social Media Posts")
-    
-    # Checkbox management with session state
-    if 'selected_channels' not in st.session_state:
-        st.session_state['selected_channels'] = []
-
-    facebook = st.checkbox("Facebook", value="facebook" in st.session_state['selected_channels'])
-    linkedin = st.checkbox("LinkedIn", value="linkedin" in st.session_state['selected_channels'])
-    instagram = st.checkbox("Instagram", value="instagram" in st.session_state['selected_channels'])
-
-    # Update session state based on checkbox selection
-    selected_channels = []
-    if facebook:
-        selected_channels.append("facebook")
-    if linkedin:
-        selected_channels.append("linkedin")
-    if instagram:
-        selected_channels.append("instagram")
-    
-    st.session_state['selected_channels'] = selected_channels
-
-    if selected_channels and 'generated_contents' in st.session_state:
-        # Ensure session state management for social content
-        if 'social_media_contents' not in st.session_state:
-            st.session_state['social_media_contents'] = []
-
-        if st.button("Generate Social Media Content"):
-            social_media_contents = []
-            for idx, generated_content in enumerate(st.session_state['generated_contents']):
-                # Generate social content based on the specific row's generated content
-                social_content_for_row = generate_social_content_with_retry(generated_content, selected_channels)
-
-                if social_content_for_row:
-                    social_media_contents.append(social_content_for_row)
-            
-            st.session_state['social_media_contents'] = social_media_contents
-
-    # Display the social media content for each channel and row
-    if 'social_media_contents' in st.session_state:
-        for idx, social_content in enumerate(st.session_state['social_media_contents']):
-            st.subheader(f"Generated Social Media Content for Row {idx + 1}")
-            for channel, content in social_content.items():
-                st.subheader(f"{channel.capitalize()} Post")
-                st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content_{idx}")
-                st.download_button(
-                    label=f"Download {channel.capitalize()} Content",
-                    data=content,
-                    file_name=f"{channel}_post_row{idx + 1}.txt",
-                    mime="text/plain",
-                    key=f"download_{channel}_row_{idx}"
-                )
 
     if st.button("Update Google Sheet"):
         sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'  # Target Google Sheet ID
