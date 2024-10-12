@@ -10,7 +10,6 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-# Possible columns to update in the Google Sheets based on templates
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
     "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
@@ -171,6 +170,10 @@ def build_template_prompt(sheet_row, template_structure):
     return prompt, job_id
 
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
+    if not isinstance(prompt, str) or not prompt.strip():
+        st.error(f"Invalid prompt for Job ID {job_id}. Skipping generation.")
+        return None
+    
     for i in range(retries):
         try:
             # Correcting the message format to be a string as required by the API
@@ -199,34 +202,6 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
             time.sleep(delay)
 
     return None
-
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
-        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
-        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
-    }
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = social_prompts[channel]
-                message = client.completions.create(
-                    model="claude-3-5-sonnet-20240620",
-                    max_tokens_to_sample=500,
-                    temperature=0.7,
-                    prompt=prompt
-                )
-                
-                if message['completion'] and len(message['completion']) > 0:
-                    generated_content[channel] = message['completion']
-                break  # Break the retry loop if successful
-            
-            except anthropic.APIError as e:
-                st.warning(f"Error generating {channel} content: {e}. Retrying...")
-                time.sleep(delay)
-    
-    return generated_content
 
 def main():
     st.title("AI Script and Social Media Content Generator")
