@@ -6,24 +6,26 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 def clean_job_id(job_id):
+    if not job_id:
+        return None
     match = re.search(r'\(([\d-]+-[a-zA-Z]+)\)', job_id)
     if match:
         return match.group(1).strip().lower()
     else:
         return job_id.strip().lower()
 
-def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content):
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     gc = gspread.authorize(credentials)
     
+    job_id_normalized = clean_job_id(job_id)
+
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
         rows = sheet.get_all_values()
 
-        job_id_normalized = clean_job_id(job_id)
-        
         for i, row in enumerate(rows):
             job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
             if not job_id_in_sheet:
@@ -54,14 +56,22 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                             time.sleep(1)
                 
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
-                return
+                return True  # Success
 
         st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
+        return False  # No match
 
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-    except Exception as e:
-        st.error(f"An error occurred while updating the Google Sheet: {e}")
+        return False
+    except gspread.exceptions.APIError as e:
+        if retries > 0 and e.response.status_code == 500:
+            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
+            time.sleep(5)
+            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries-1)
+        else:
+            st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
+            return False
 
 @st.cache_data
 def load_google_sheet(sheet_id):
@@ -157,7 +167,6 @@ def build_template_prompt(sheet_row, template_structure):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            # This section would use your actual API call for content generation (e.g., OpenAI, Anthropic, etc.)
             message = f"Generated content for {job_id}: {prompt}"
             content = {
                 "Text01": f"Generated headline for {job_id}",
@@ -183,7 +192,6 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     for channel in selected_channels:
         for i in range(retries):
             try:
-                # This section would use your actual API call for social media content generation
                 generated_content[channel] = f"{channel.capitalize()} post for content: {main_content}"
                 break
             except Exception as e:
