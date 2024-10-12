@@ -19,6 +19,7 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
+# Helper function to clean Job IDs
 def clean_job_id(job_id):
     return job_id.strip().lower() if job_id else None
 
@@ -80,6 +81,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             st.error(f"Error updating Google Sheet: {e.response.json()}")
             return False
 
+# Load Google Sheet data
 @st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -94,6 +96,7 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame()
 
+# Load template data from CSV file
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -104,6 +107,7 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
+# Clean text content to remove unwanted characters
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -118,6 +122,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Extract template structure based on the selected template
 def extract_template_structure(selected_template, examples_data):
     template_number_str = selected_template.split('_')[-1] if "template_SH_" in selected_template else "01"
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
@@ -133,6 +138,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+# Build prompt for content generation based on template
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -141,14 +147,16 @@ def build_template_prompt(sheet_row, template_structure):
         return None, None
 
     prompt = f"\n\nHuman: Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
-    prompt += "For each section, generate content according to the following structure:\n\n"
+    prompt += "For each section, generate content in strict order according to the following structure. Ensure you stay within the given character limits:\n\n"
 
     for section_name, content in template_structure:
         max_chars = len(content)
         prompt += f"{section_name}: {max_chars} characters limit.\n"
 
+    prompt += "\n\nAssistant:"
     return prompt, job_id
 
+# Retry function for content generation
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     if not isinstance(prompt, str) or not prompt.strip():
         st.error(f"Invalid prompt for Job ID {job_id}. Skipping generation.")
@@ -179,9 +187,10 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
         except anthropic.APIError as e:
             st.warning(f"Error: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
             time.sleep(delay)
-
+    
     return None
 
+# Retry function for social media content generation
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
