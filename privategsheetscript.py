@@ -1,6 +1,7 @@
 import re
 import time
 import streamlit as st
+import pandas as pd  # Missing pandas import
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -70,7 +71,7 @@ def load_google_sheet(sheet_id):
     gc = gspread.authorize(credentials)
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())
+        data = pd.DataFrame(sheet.get_all_records())  # Ensure pandas is used correctly here
         return data
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
