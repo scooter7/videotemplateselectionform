@@ -157,16 +157,29 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     return generated_content
 
 # Map content to specific cells in the Google Sheet based on the template
+# Map content to specific cells in the Google Sheet based on the template
 def map_generated_content_to_cells(generated_content):
     """Map each section to its corresponding cell in the Google Sheet."""
     mapping = {
-        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L",
-        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R",
-        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X",
-        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD",
-        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ",
+        # Mapping for Text01 and its variants
+        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
+        
+        # Mapping for Text02 and its variants
+        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
+        
+        # Mapping for Text03 and its variants
+        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
+        
+        # Mapping for Text04 and its variants
+        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
+        
+        # Mapping for Text05 and its variants
+        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
+        
+        # Mapping for CTA and other content
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
+
     # Extract the mapped content based on the predefined mapping
     mapped_content = {mapping[key]: value for key, value in generated_content.items() if key in mapping}
     return mapped_content
