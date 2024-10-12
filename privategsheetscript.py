@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-import anthropic
+from anthropic import Client  # Import the anthropic client
 
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
@@ -14,6 +14,10 @@ possible_columns = [
     "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
+
+# Initialize the Anthropic client with the API key
+api_key = st.secrets["anthropic"]["api_key"]
+client = Client(api_key=api_key)
 
 # Helper function to clean Job IDs
 def clean_job_id(job_id):
@@ -175,7 +179,7 @@ def build_template_prompt(sheet_row, template_structure):
                 prompt += f"Section {section_name}: Extract a **distinct part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Stay within {max_chars} characters.\n"
 
     if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
+        prompt += "Ensure a clear call-to-action (CTA-Text) is provided."
 
     return prompt, job_id
 
