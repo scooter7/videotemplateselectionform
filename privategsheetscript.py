@@ -190,6 +190,15 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 
     return None
 
+import re
+
+def clean_job_id(job_id):
+    match = re.search(r'\(([\d-]+-[a-zA-Z]+)\)', job_id)
+    if match:
+        return match.group(1).strip().lower()
+    else:
+        return job_id.strip().lower()
+
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -200,16 +209,16 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         sheet = gc.open_by_key(sheet_id).sheet1
         rows = sheet.get_all_values()
 
-        # Normalize the Job ID to strip whitespaces and compare case-insensitively
-        job_id_normalized = job_id.strip().lower()
-
+        # Clean the Job ID from the request sheet
+        job_id_normalized = clean_job_id(job_id)
+        
         # Find the row that matches the Job ID
         for i, row in enumerate(rows):
             job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None  # Check if Job-ID exists
             if not job_id_in_sheet:
                 continue  # Skip if Job-ID is missing
             
-            # Only display the matching Job ID comparison
+            # Compare only the cleaned job_id
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
@@ -226,11 +235,9 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                     sheet.update_acell(f'{column_letter}{row_index}', social_content)
                     time.sleep(1)
 
+                # Only display a success message for matches
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
                 return
-
-        # Only display an error message if no match was found at all
-        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
 
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
