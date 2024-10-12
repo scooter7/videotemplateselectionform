@@ -33,10 +33,10 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                 row_index = i + 1
 
                 # Update content in relevant columns based on template structure
-                sheet.update_acell(f'H{row_index}', generated_content['Text01'])  # Column H
-                sheet.update_acell(f'I{row_index}', generated_content['Text01-1'])  # Column I
-                sheet.update_acell(f'N{row_index}', generated_content['Text02'])  # Column N
-                sheet.update_acell(f'O{row_index}', generated_content['Text02-1'])  # Column O
+                sheet.update_acell(f'H{row_index}', generated_content.get('Text01', ''))  # Column H
+                sheet.update_acell(f'I{row_index}', generated_content.get('Text01-1', ''))  # Column I
+                sheet.update_acell(f'N{row_index}', generated_content.get('Text02', ''))  # Column N
+                sheet.update_acell(f'O{row_index}', generated_content.get('Text02-1', ''))  # Column O
                 time.sleep(1)
 
                 # Update social media content if present
@@ -138,26 +138,13 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given, ensuring that the content of the umbrella sections is divided **verbatim** into subsections.\n\n"
+    prompt = f"Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
     
-    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "For each section, generate content **in strict order**. Subsections must split the umbrella section **verbatim** into distinct, meaningful parts. **Do not reorder sections or introduce new content**:\n\n"
+    prompt += "For each section, generate content in strict order according to the following structure. Ensure you stay within the given character limits:\n\n"
 
-    umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-        if '-' not in section_name:
-            umbrella_sections[section_name] = section_name
-            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
-        else:
-            umbrella_key = section_name.split('-')[0]
-            if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a **distinct, verbatim part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and **no new content is introduced**.\n"
-
-    if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
-
-    prompt += "\nStrictly generate content for every section, ensuring subsections extract distinct, verbatim parts from the umbrella content in proper order."
+        prompt += f"{section_name}: {max_chars} characters limit.\n"
 
     return prompt, job_id
 
@@ -167,10 +154,10 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
         try:
             # This section would use your actual API call for content generation (e.g., OpenAI, Anthropic, etc.)
             content = {
-                "Text01": f"Generated headline for {job_id}",
-                "Text01-1": f"Generated sub-headline for {job_id}",
-                "Text02": f"Generated description for {job_id}",
-                "Text02-1": f"Generated additional details for {job_id}"
+                "Text01": f"Custom headline based on the theme of Job ID {job_id}",
+                "Text01-1": f"Custom sub-headline based on the theme of Job ID {job_id}",
+                "Text02": f"Custom description based on the theme of Job ID {job_id}",
+                "Text02-1": f"Additional details based on the theme of Job ID {job_id}"
             }
             return content
         
@@ -191,7 +178,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     for channel in selected_channels:
         for i in range(retries):
             try:
-                generated_content[channel] = f"{channel.capitalize()} post for content: {main_content}"
+                generated_content[channel] = f"{channel.capitalize()} post based on the theme: {main_content}"
                 break
             except Exception as e:
                 st.warning(f"Error generating {channel} content: {e}. Retrying...")
