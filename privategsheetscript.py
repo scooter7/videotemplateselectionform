@@ -209,8 +209,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             if not job_id_in_sheet:
                 continue  # Skip if Job-ID is missing
             
-            st.write(f"Comparing Job-ID in target sheet: {job_id_in_sheet} with source Job-ID: {job_id_normalized}")
-            
+            # Only display the matching Job ID comparison
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
@@ -230,6 +229,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
                 return
 
+        # Only display an error message if no match was found at all
         st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
 
     except gspread.SpreadsheetNotFound:
