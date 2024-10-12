@@ -200,15 +200,22 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         sheet = gc.open_by_key(sheet_id).sheet1
         rows = sheet.get_all_values()
 
+        # Normalize the Job ID to strip whitespaces and compare case-insensitively
+        job_id_normalized = job_id.strip().lower()
+
+        # Find the row that matches the Job ID
         for i, row in enumerate(rows):
-            if row[1].strip().lower() == job_id.strip().lower():
+            job_id_in_sheet = row[1].strip().lower()  # Assuming Job ID is in column B
+            if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
+                # Update text content in columns H-BS
                 for idx, content in enumerate(generated_content):
                     column_letter = chr(72 + idx)
                     sheet.update_acell(f'{column_letter}{row_index}', content)
                     time.sleep(1)
 
+                # Update social media content in columns BU-BZ
                 social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]
                 for idx, (channel, social_content) in enumerate(social_media_content.items()):
                     column_letter = social_media_columns[idx]
@@ -224,6 +231,8 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
     except Exception as e:
         st.error(f"An error occurred while updating the Google Sheet: {e}")
+
+# Main function remains the same as previous.
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
