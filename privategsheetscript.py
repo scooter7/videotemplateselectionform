@@ -205,8 +205,12 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
 
         # Find the row that matches the Job ID
         for i, row in enumerate(rows):
-            job_id_in_sheet = row[1].strip().lower()  # Assuming Job-ID is in column B
+            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None  # Check if Job-ID exists
+            if not job_id_in_sheet:
+                continue  # Skip if Job-ID is missing
+            
             st.write(f"Comparing Job-ID in target sheet: {job_id_in_sheet} with source Job-ID: {job_id_normalized}")
+            
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
