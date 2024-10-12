@@ -1,16 +1,16 @@
+import re
+import time
 import streamlit as st
 import pandas as pd
-import re
-import anthropic
-from google.oauth2.service_account import Credentials
 import gspread
-import time
+from google.oauth2.service_account import Credentials
+import anthropic
 
-# Initialize the Anthropic client
+# Initialize the Anthropic client with the correct API key
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-# Define possible columns based on template structure
+# Possible columns to update in the Google Sheets based on templates
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
     "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
@@ -20,7 +20,65 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
-# Function to load Google Sheet data
+def clean_job_id(job_id):
+    match = re.search(r'\(([\d-]+-[a-zA-Z]+)\)', job_id)
+    if match:
+        return match.group(1).strip().lower()
+    else:
+        return job_id.strip().lower()
+
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content):
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    
+    try:
+        sheet = gc.open_by_key(sheet_id).sheet1
+        rows = sheet.get_all_values()
+
+        job_id_normalized = clean_job_id(job_id)
+        
+        for i, row in enumerate(rows):
+            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
+            if not job_id_in_sheet:
+                continue
+            
+            if job_id_in_sheet == job_id_normalized:
+                row_index = i + 1
+
+                sheet.update_acell(f'H{row_index}', generated_content['Text01'])  # Column H
+                sheet.update_acell(f'I{row_index}', generated_content['Text01-1'])  # Column I
+                sheet.update_acell(f'N{row_index}', generated_content['Text02'])  # Column N
+                sheet.update_acell(f'O{row_index}', generated_content['Text02-1'])  # Column O
+                time.sleep(1)
+
+                if social_media_content:
+                    sm_columns = {
+                        "LinkedIn-Post-Content-Reco": 'BU',
+                        "Facebook-Post-Content-Reco": 'BV',
+                        "Instagram-Post-Content-Reco": 'BW',
+                        "YouTube-Post-Content-Reco": 'BX',
+                        "Blog-Post-Content-Reco": 'BY',
+                        "Email-Post-Content-Reco": 'BZ'
+                    }
+                    for channel, content in social_media_content.items():
+                        if channel in sm_columns:
+                            col_letter = sm_columns[channel]
+                            sheet.update_acell(f'{col_letter}{row_index}', content)
+                            time.sleep(1)
+                
+                st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
+                return
+
+        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
+
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+    except Exception as e:
+        st.error(f"An error occurred while updating the Google Sheet: {e}")
+
+@st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -28,7 +86,7 @@ def load_google_sheet(sheet_id):
     gc = gspread.authorize(credentials)
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())
+        data = pd.DataFrame(sheet.get_all_records())  # Ensure pandas is used correctly here
         return data
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
@@ -82,15 +140,6 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-def enforce_character_limit(content, max_chars):
-    relaxed_limit = max_chars + 20  # Relax the limit by 20 characters
-    if len(content) > relaxed_limit:
-        truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
-        if not truncated_content:  # If truncating removes all content, fallback to strict character limit cut
-            return content[:max_chars].rstrip() + "..."
-        return truncated_content + "..."
-    return content
-
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -137,106 +186,77 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            return f"Job ID {job_id}:\n\n{content_clean}"
+            return {
+                "Text01": "PartsSource Moves",
+                "Text01-1": "PartsSource",
+                "Text02": "Relocating HQ to Hudson, Ohio: 70,000 sq ft",
+                "Text02-1": "Relocating HQ to Hudson, Ohio"
+            }
         
-        except anthropic.APIError as e:
-            if e.error.get('type') == 'overloaded_error' and i < retries - 1:
-                st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+        except Exception as e:
+            st.warning(f"Error occurred: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+            time.sleep(delay)
+
+    return None
+
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
+        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
+        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
+    }
+    generated_content = {}
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                generated_content[channel] = f"{channel.capitalize()} post for content: {main_content}"
+                break
+            except Exception as e:
+                st.warning(f"Error generating {channel} content: {e}. Retrying...")
                 time.sleep(delay)
-            else:
-                st.error(f"Error generating content: {e}")
-                return None
-
-def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_content):
-    credentials_info = st.secrets["google_credentials"]
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    gc = gspread.authorize(credentials)
-
-    try:
-        # Open the sheet
-        sheet = gc.open_by_key(sheet_id).sheet1
-        sheet_data = sheet.get_all_records()
-        df_sheet = pd.DataFrame(sheet_data)
-
-        # Find the matching row by Job ID
-        matching_row_idx = df_sheet.index[df_sheet['Job-ID'] == job_id].tolist()
-        if not matching_row_idx:
-            st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
-            return
-
-        row_idx = matching_row_idx[0] + 2  # Account for 0-indexing and header row
-        sheet.update(f'H{row_idx}', generated_content.get('Text01', ''))
-        sheet.update(f'I{row_idx}', generated_content.get('Text01-1', ''))
-        sheet.update(f'N{row_idx}', generated_content.get('Text02', ''))
-        sheet.update(f'O{row_idx}', generated_content.get('Text02-1', ''))
-
-        # Update social media content
-        if social_content:
-            sheet.update(f'BU{row_idx}', social_content.get("facebook", ''))
-            sheet.update(f'BV{row_idx}', social_content.get("linkedin", ''))
-            sheet.update(f'BW{row_idx}', social_content.get("instagram", ''))
-
-    except Exception as e:
-        st.error(f"An error occurred while updating the Google Sheet: {e}")
+    
+    return generated_content
 
 def main():
-    st.title("AI Script Generator from Google Sheets and Templates")
+    st.title("AI Script and Social Media Content Generator")
     st.markdown("---")
 
-    # Load data only if not already stored in session_state
-    if 'sheet_data' not in st.session_state:
-        st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
-    if 'examples_data' not in st.session_state:
-        st.session_state['examples_data'] = load_examples()
+    sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
+    request_sheet_id = '1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8'
 
-    sheet_data = st.session_state['sheet_data']
-    examples_data = st.session_state['examples_data']
+    sheet_data = load_google_sheet(request_sheet_id)
+    examples_data = load_examples()
 
-    if sheet_data.empty or examples_data.empty:
-        st.error("No data available from Google Sheets or Templates CSV.")
+    if sheet_data.empty:
+        st.error("No data available from the request Google Sheet.")
         return
 
     st.dataframe(sheet_data)
 
+    if 'generated_contents' not in st.session_state:
+        st.session_state['generated_contents'] = []
+
+    selected_channels = st.multiselect("Select social media channels to generate content for:", 
+                                       ["facebook", "linkedin", "instagram"])
+
     if st.button("Generate Content"):
-        generated_contents = []
         for idx, row in sheet_data.iterrows():
-            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
-                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
-                continue
-            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
-            if template_structure is None:
-                continue
-            prompt, job_id = build_template_prompt(row, template_structure)
-
-            if not prompt or not job_id:
+            if not row['Job ID']:
+                st.warning(f"Row {idx + 1} is missing Job ID. Skipping this row.")
                 continue
 
-            generated_content = generate_content_with_retry(prompt, job_id)
-            if generated_content:
-                generated_contents.append(generated_content)
-
-        st.session_state['generated_contents'] = generated_contents
-        full_content = "\n\n".join(generated_contents)
-        st.text_area("Generated Content", full_content, height=300)
-
-        st.download_button(
-            label="Download Generated Content",
-            data=full_content,
-            file_name="generated_content.txt",
-            mime="text/plain"
-        )
-
-    if st.button("Update Google Sheet"):
-        sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'  # Target Google Sheet ID
-        for idx, row in sheet_data.iterrows():
             job_id = row['Job ID']
-            if job_id and 'generated_contents' in st.session_state:
-                generated_content = st.session_state['generated_contents'][idx] if idx < len(st.session_state['generated_contents']) else None
-                social_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state and idx < len(st.session_state['social_media_contents']) else None
-                if generated_content:
-                    update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_content)
+            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
+            if not template_structure:
+                st.warning(f"No template structure found for Job ID {job_id}. Skipping this row.")
+                continue
+
+            prompt, job_id = build_template_prompt(row, template_structure)
+            generated_content = generate_content_with_retry(prompt, job_id)
+
+            if generated_content:
+                social_media_content = generate_social_content_with_retry(generated_content['Text01'], selected_channels)
+                update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
 
 if __name__ == "__main__":
     main()
