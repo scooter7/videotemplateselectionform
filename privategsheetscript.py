@@ -10,76 +10,48 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-possible_columns = [
-    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
-    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
-    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
-    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
-    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
-    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
-]
+st.markdown(
+    """
+    <style>
+    .st-emotion-cache-12fmjuu.ezrtsby2 {
+        display: none;
+    }
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .logo-container img {
+        width: 600px;
+    }
+    .app-container {
+        border-left: 5px solid #58258b;
+        border-right: 5px solid #58258b;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
+        color: #42145f;
+    }
+    .stButton button {
+        background-color: #fec923;
+        color: #42145f;
+    }
+    .stButton button:hover {
+        background-color: #42145f;
+        color: #fec923;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Helper function to clean Job IDs
 def clean_job_id(job_id):
-    return job_id.strip().lower() if job_id else None
-
-# Update Google Sheet with generated content and social media content
-def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
-    credentials_info = st.secrets["google_credentials"]
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    gc = gspread.authorize(credentials)
-    
-    job_id_normalized = clean_job_id(job_id)
-
-    try:
-        sheet = gc.open_by_key(sheet_id).sheet1
-        rows = sheet.get_all_values()
-
-        for i, row in enumerate(rows):
-            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
-            if job_id_in_sheet == job_id_normalized:
-                row_index = i + 1
-
-                # Update relevant columns in the sheet
-                sheet.update_acell(f'H{row_index}', generated_content.get('Text01', ''))
-                sheet.update_acell(f'I{row_index}', generated_content.get('Text01-1', ''))
-                sheet.update_acell(f'N{row_index}', generated_content.get('Text02', ''))
-                sheet.update_acell(f'O{row_index}', generated_content.get('Text02-1', ''))
-                time.sleep(1)
-
-                # Update social media content if present
-                if social_media_content:
-                    sm_columns = {
-                        "LinkedIn-Post-Content-Reco": 'BU',
-                        "Facebook-Post-Content-Reco": 'BV',
-                        "Instagram-Post-Content-Reco": 'BW',
-                        "YouTube-Post-Content-Reco": 'BX',
-                        "Blog-Post-Content-Reco": 'BY',
-                        "Email-Post-Content-Reco": 'BZ'
-                    }
-                    for channel, content in social_media_content.items():
-                        if channel in sm_columns:
-                            col_letter = sm_columns[channel]
-                            sheet.update_acell(f'{col_letter}{row_index}', content)
-                            time.sleep(1)
-                
-                st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
-                return True
-        st.error(f"No matching Job ID found for '{job_id}' in the sheet.")
-        return False
-
-    except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return False
-    except gspread.exceptions.APIError as e:
-        if retries > 0 and e.response.status_code == 500:
-            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
-            time.sleep(5)
-            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries-1)
-        else:
-            st.error(f"Error updating Google Sheet: {e.response.json()}")
-            return False
+    if not job_id:
+        return None
+    return job_id.strip().lower()
 
 # Load Google Sheet data
 @st.cache_data
@@ -124,7 +96,15 @@ def clean_text(text):
 
 # Extract template structure based on the selected template
 def extract_template_structure(selected_template, examples_data):
-    template_number_str = selected_template.split('_')[-1] if "template_SH_" in selected_template else "01"
+    if "template_SH_" in selected_template:
+        try:
+            template_number = int(selected_template.split('_')[-1])
+            template_number_str = f"{template_number:02d}"
+        except ValueError:
+            template_number_str = "01"
+    else:
+        template_number_str = "01"
+
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
@@ -146,33 +126,28 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"\n\nHuman: Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
+    prompt = f"Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
     prompt += "For each section, generate content in strict order according to the following structure. Ensure you stay within the given character limits:\n\n"
 
     for section_name, content in template_structure:
         max_chars = len(content)
         prompt += f"{section_name}: {max_chars} characters limit.\n"
 
-    prompt += "\n\nAssistant:"
     return prompt, job_id
 
 # Retry function for content generation
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
-    if not isinstance(prompt, str) or not prompt.strip():
-        st.error(f"Invalid prompt for Job ID {job_id}. Skipping generation.")
-        return None
-    
     for i in range(retries):
         try:
-            message = client.completions.create(
+            message = client.messages.create(
                 model="claude-3-5-sonnet-20240620",
-                max_tokens_to_sample=1000,
+                max_tokens=1000,
                 temperature=0.7,
-                prompt=prompt
+                messages=[{"role": "user", "content": prompt}]
             )
             
-            if message['completion'] and len(message['completion']) > 0:
-                content = message['completion']
+            if message.content and len(message.content) > 0:
+                content = message.content[0].text
             else:
                 content = "No content generated."
 
@@ -181,13 +156,13 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 "Text01": content_clean[:100],
                 "Text01-1": content_clean[100:200],
                 "Text02": content_clean[200:300],
-                "Text02-1": content_clean[300:400]
+                "Text02-1": content_clean[300:]
             }
         
         except anthropic.APIError as e:
-            st.warning(f"Error: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+            st.warning(f"Error generating content for Job ID {job_id}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
             time.sleep(delay)
-    
+
     return None
 
 # Retry function for social media content generation
@@ -201,16 +176,15 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     for channel in selected_channels:
         for i in range(retries):
             try:
-                prompt = social_prompts[channel]
-                message = client.completions.create(
+                message = client.messages.create(
                     model="claude-3-5-sonnet-20240620",
-                    max_tokens_to_sample=500,
+                    max_tokens=500,
                     temperature=0.7,
-                    prompt=prompt
+                    messages=[{"role": "user", "content": social_prompts[channel]}]
                 )
                 
-                if message['completion'] and len(message['completion']) > 0:
-                    generated_content[channel] = message['completion']
+                if message.content and len(message.content) > 0:
+                    generated_content[channel] = message.content[0].text
                 break
             
             except anthropic.APIError as e:
@@ -218,6 +192,68 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                 time.sleep(delay)
     
     return generated_content
+
+# Update Google Sheet with generated content and social media content
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    
+    job_id_normalized = clean_job_id(job_id)
+
+    try:
+        sheet = gc.open_by_key(sheet_id).sheet1
+        rows = sheet.get_all_values()
+
+        for i, row in enumerate(rows):
+            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
+            if not job_id_in_sheet:
+                continue
+            
+            if job_id_in_sheet == job_id_normalized:
+                row_index = i + 1
+
+                # Update content in relevant columns
+                sheet.update_acell(f'H{row_index}', generated_content.get('Text01', ''))  # Column H
+                sheet.update_acell(f'I{row_index}', generated_content.get('Text01-1', ''))  # Column I
+                sheet.update_acell(f'N{row_index}', generated_content.get('Text02', ''))  # Column N
+                sheet.update_acell(f'O{row_index}', generated_content.get('Text02-1', ''))  # Column O
+                time.sleep(1)
+
+                # Update social media content if present
+                if social_media_content:
+                    sm_columns = {
+                        "LinkedIn-Post-Content-Reco": 'BU',
+                        "Facebook-Post-Content-Reco": 'BV',
+                        "Instagram-Post-Content-Reco": 'BW',
+                        "YouTube-Post-Content-Reco": 'BX',
+                        "Blog-Post-Content-Reco": 'BY',
+                        "Email-Post-Content-Reco": 'BZ'
+                    }
+                    for channel, content in social_media_content.items():
+                        if channel in sm_columns:
+                            col_letter = sm_columns[channel]
+                            sheet.update_acell(f'{col_letter}{row_index}', content)
+                            time.sleep(1)
+                
+                st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
+                return True
+
+        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
+        return False
+
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+        return False
+    except gspread.exceptions.APIError as e:
+        if retries > 0 and e.response.status_code == 500:
+            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
+            time.sleep(5)
+            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries-1)
+        else:
+            st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
+            return False
 
 def main():
     st.title("AI Script and Social Media Content Generator")
@@ -234,6 +270,9 @@ def main():
         return
 
     st.dataframe(sheet_data)
+
+    if 'generated_contents' not in st.session_state:
+        st.session_state['generated_contents'] = []
 
     selected_channels = st.multiselect("Select social media channels to generate content for:", 
                                        ["facebook", "linkedin", "instagram"])
