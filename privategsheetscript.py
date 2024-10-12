@@ -152,6 +152,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     return generated_content
 
 # Update Google Sheet with generated content and social media content
+# Update Google Sheet with generated content and social media content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -172,14 +173,14 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
-                # Update the main content
+                # Map the generated content to the correct sections
                 if generated_content:
-                    content_sections = generated_content.split('\n')
-                    for idx, content in enumerate(content_sections):
-                        if idx < 50:  # Adjust index to cover all sections up to Text10-4
-                            col_letter = chr(ord('H') + idx)
-                            sheet.update_acell(f'{col_letter}{row_index}', content)
-                            time.sleep(1)
+                    mapped_content = map_generated_content_to_cells(generated_content)
+                    
+                    # Update the corresponding cells with the mapped content
+                    for col_letter, content in mapped_content.items():
+                        sheet.update_acell(f'{col_letter}{row_index}', content)
+                        time.sleep(1)
 
                 # Update social media content if present
                 if social_media_content:
