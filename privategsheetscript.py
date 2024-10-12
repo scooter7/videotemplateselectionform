@@ -215,11 +215,13 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         # Find the row that matches the Job ID
         for i, row in enumerate(rows):
             job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None  # Check if Job-ID exists
+            st.write(f"Processing Row {i + 1}: Job-ID in target sheet: {job_id_in_sheet}")  # Debug: show row being processed
             if not job_id_in_sheet:
                 continue  # Skip if Job-ID is missing
             
             # Compare only the cleaned job_id
             if job_id_in_sheet == job_id_normalized:
+                st.write(f"Match found for Job-ID: {job_id_in_sheet}")  # Debug: show when a match is found
                 row_index = i + 1
 
                 # Update text content in columns H-BS
@@ -227,6 +229,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                     column_letter = chr(72 + idx)
                     sheet.update_acell(f'{column_letter}{row_index}', content)
                     time.sleep(1)
+                    st.write(f"Updated content in column {column_letter}{row_index}")  # Debug: confirm update
 
                 # Update social media content in columns LinkedIn-Post-Content-Reco, etc.
                 social_media_columns = ["LinkedIn-Post-Content-Reco", "Facebook-Post-Content-Reco", "Instagram-Post-Content-Reco", "YouTube-Post-Content-Reco", "Blog-Post-Content-Reco", "Email-Post-Content-Reco"]
@@ -234,10 +237,13 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                     column_letter = chr(72 + idx)
                     sheet.update_acell(f'{column_letter}{row_index}', social_content)
                     time.sleep(1)
+                    st.write(f"Updated social media content in column {column_letter}{row_index}")  # Debug: confirm update
 
-                # Only display a success message for matches
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
                 return
+
+        # If no match was found, show this message
+        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
 
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
