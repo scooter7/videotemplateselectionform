@@ -173,7 +173,7 @@ def build_template_prompt(sheet_row, template_structure):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            # Correcting the message format to be a list of dictionaries, as required by the API
+            # Correcting the message format to be a string as required by the API
             message = client.completions.create(
                 model="claude-3-5-sonnet-20240620",  # Use the Claude model
                 max_tokens_to_sample=1000,
@@ -181,14 +181,14 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 prompt=prompt
             )
             
-            if message['completion']:
+            if message['completion'] and len(message['completion']) > 0:
                 content = message['completion']
             else:
                 content = "No content generated."
 
             content_clean = clean_text(content)
             return {
-                "Text01": content_clean[0:100],
+                "Text01": content_clean[:100],
                 "Text01-1": content_clean[100:200],
                 "Text02": content_clean[200:300],
                 "Text02-1": content_clean[300:400]
@@ -210,9 +210,19 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     for channel in selected_channels:
         for i in range(retries):
             try:
-                generated_content[channel] = f"{channel.capitalize()} post for content: {main_content}"
-                break
-            except Exception as e:
+                prompt = social_prompts[channel]
+                message = client.completions.create(
+                    model="claude-3-5-sonnet-20240620",
+                    max_tokens_to_sample=500,
+                    temperature=0.7,
+                    prompt=prompt
+                )
+                
+                if message['completion'] and len(message['completion']) > 0:
+                    generated_content[channel] = message['completion']
+                break  # Break the retry loop if successful
+            
+            except anthropic.APIError as e:
                 st.warning(f"Error generating {channel} content: {e}. Retrying...")
                 time.sleep(delay)
     
