@@ -10,43 +10,6 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-st.markdown(
-    """
-    <style>
-    .st-emotion-cache-12fmjuu.ezrtsby2 {
-        display: none;
-    }
-    .logo-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .logo-container img {
-        width: 600px;
-    }
-    .app-container {
-        border-left: 5px solid #58258b;
-        border-right: 5px solid #58258b;
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
-        color: #42145f;
-    }
-    .stButton button {
-        background-color: #fec923;
-        color: #42145f;
-    }
-    .stButton button:hover {
-        background-color: #42145f;
-        color: #fec923;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # Helper function to clean Job IDs
 def clean_job_id(job_id):
     if not job_id:
@@ -193,6 +156,21 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     
     return generated_content
 
+# Map content to specific cells in the Google Sheet based on the template
+def map_generated_content_to_cells(generated_content):
+    """Map each section to its corresponding cell in the Google Sheet."""
+    mapping = {
+        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L",
+        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R",
+        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X",
+        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD",
+        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ",
+        "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
+    }
+    # Extract the mapped content based on the predefined mapping
+    mapped_content = {mapping[key]: value for key, value in generated_content.items() if key in mapping}
+    return mapped_content
+
 # Update Google Sheet with generated content and social media content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
@@ -214,12 +192,13 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
-                # Update content in relevant columns
-                sheet.update_acell(f'H{row_index}', generated_content.get('Text01', ''))  # Column H
-                sheet.update_acell(f'I{row_index}', generated_content.get('Text01-1', ''))  # Column I
-                sheet.update_acell(f'N{row_index}', generated_content.get('Text02', ''))  # Column N
-                sheet.update_acell(f'O{row_index}', generated_content.get('Text02-1', ''))  # Column O
-                time.sleep(1)
+                # Map the generated content to the correct cells in the sheet
+                mapped_content = map_generated_content_to_cells(generated_content)
+                
+                # Update the corresponding cells with the mapped content
+                for col_letter, content in mapped_content.items():
+                    sheet.update_acell(f'{col_letter}{row_index}', content)
+                    time.sleep(1)
 
                 # Update social media content if present
                 if social_media_content:
