@@ -6,65 +6,11 @@ from google.oauth2.service_account import Credentials
 import gspread
 import time
 
-# Initialize the Anthropic client with the correct API key
+# Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-# Styling for the app
-st.markdown(
-    """
-    <style>
-    .st-emotion-cache-12fmjuu.ezrtsby2 {
-        display: none;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    """
-    <style>
-    .logo-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .logo-container img {
-        width: 600px;
-    }
-    .app-container {
-        border-left: 5px solid #58258b;
-        border-right: 5px solid #58258b;
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
-        color: #42145f;
-    }
-    .stButton button {
-        background-color: #fec923;
-        color: #42145f;
-    }
-    .stButton button:hover {
-        background-color: #42145f;
-        color: #fec923;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-possible_columns = [
-    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
-    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
-    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
-    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
-    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
-    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
-]
-
+# Function to load Google Sheet data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -191,35 +137,38 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
-        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
-        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
-    }
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = social_prompts[channel]
-                message = client.messages.create(
-                    model="claude-3-5-sonnet-20240620",
-                    max_tokens=500,
-                    temperature=0.7,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                
-                if message.content and len(message.content) > 0:
-                    generated_content[channel] = message.content[0].text
-                break  # Break the retry loop if successful
-            
-            except anthropic.APIError as e:
-                if e.error.get('type') == 'overloaded_error' and i < retries - 1:
-                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                    time.sleep(delay)
-                else:
-                    st.error(f"Error generating {channel} content: {e}")
-    return generated_content
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_content):
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+
+    try:
+        # Open the sheet
+        sheet = gc.open_by_key(sheet_id).sheet1
+        sheet_data = sheet.get_all_records()
+        df_sheet = pd.DataFrame(sheet_data)
+
+        # Find the matching row by Job ID
+        matching_row_idx = df_sheet.index[df_sheet['Job-ID'] == job_id].tolist()
+        if not matching_row_idx:
+            st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
+            return
+
+        row_idx = matching_row_idx[0] + 2  # Account for 0-indexing and header row
+        sheet.update(f'H{row_idx}', generated_content.get('Text01', ''))
+        sheet.update(f'I{row_idx}', generated_content.get('Text01-1', ''))
+        sheet.update(f'N{row_idx}', generated_content.get('Text02', ''))
+        sheet.update(f'O{row_idx}', generated_content.get('Text02-1', ''))
+
+        # Update social media content
+        if social_content:
+            sheet.update(f'BU{row_idx}', social_content.get("facebook", ''))
+            sheet.update(f'BV{row_idx}', social_content.get("linkedin", ''))
+            sheet.update(f'BW{row_idx}', social_content.get("instagram", ''))
+
+    except Exception as e:
+        st.error(f"An error occurred while updating the Google Sheet: {e}")
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
@@ -326,7 +275,15 @@ def main():
                     key=f"download_{channel}_row_{idx}"
                 )
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button("Update Google Sheet"):
+        sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'  # Target Google Sheet ID
+        for idx, row in sheet_data.iterrows():
+            job_id = row['Job ID']
+            if job_id and 'generated_contents' in st.session_state:
+                generated_content = st.session_state['generated_contents'][idx] if idx < len(st.session_state['generated_contents']) else None
+                social_content = st.session_state['social_media_contents'][idx] if 'social_media_contents' in st.session_state and idx < len(st.session_state['social_media_contents']) else None
+                if generated_content:
+                    update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_content)
 
 if __name__ == "__main__":
     main()
