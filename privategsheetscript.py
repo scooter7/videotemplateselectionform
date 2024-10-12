@@ -1,7 +1,7 @@
 import re
 import time
 import streamlit as st
-import pandas as pd  # Missing pandas import
+import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -117,11 +117,10 @@ def extract_template_structure(selected_template, examples_data):
         return None
 
     template_structure = []
-    for col in possible_columns:
-        if col in example_row.columns:
-            text_element = example_row[col].values[0]
-            if pd.notna(text_element):
-                template_structure.append((col, text_element))
+    for col in example_row.columns:
+        text_element = example_row[col].values[0]
+        if pd.notna(text_element):
+            template_structure.append((col, text_element))
 
     return template_structure
 
@@ -158,13 +157,15 @@ def build_template_prompt(sheet_row, template_structure):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            generated_content = {
-                "Text01": "PartsSource Moves",
-                "Text01-1": "PartsSource",
-                "Text02": "Relocating HQ to Hudson, Ohio: 70,000 sq ft",
-                "Text02-1": "Relocating HQ to Hudson, Ohio"
+            # This section would use your actual API call for content generation (e.g., OpenAI, Anthropic, etc.)
+            message = f"Generated content for {job_id}: {prompt}"
+            content = {
+                "Text01": f"Generated headline for {job_id}",
+                "Text01-1": f"Generated sub-headline for {job_id}",
+                "Text02": f"Generated description for {job_id}",
+                "Text02-1": f"Generated additional details for {job_id}"
             }
-            return generated_content
+            return content
         
         except Exception as e:
             st.warning(f"Error occurred: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
@@ -182,6 +183,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     for channel in selected_channels:
         for i in range(retries):
             try:
+                # This section would use your actual API call for social media content generation
                 generated_content[channel] = f"{channel.capitalize()} post for content: {main_content}"
                 break
             except Exception as e:
@@ -198,9 +200,10 @@ def main():
     request_sheet_id = '1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8'
 
     sheet_data = load_google_sheet(request_sheet_id)
+    examples_data = load_examples()
 
-    if sheet_data.empty:
-        st.error("No data available from the request Google Sheet.")
+    if sheet_data.empty or examples_data.empty:
+        st.error("No data available from the request Google Sheet or the examples CSV.")
         return
 
     st.dataframe(sheet_data)
@@ -218,7 +221,18 @@ def main():
                 continue
 
             job_id = row['Job ID']
-            prompt = f"Generate content for Job ID {job_id}. Description: {row['Topic-Description']}"
+            selected_template = row['Selected-Template']
+            template_structure = extract_template_structure(selected_template, examples_data)
+
+            if template_structure is None:
+                st.error(f"No template found for Job ID {job_id}. Skipping this row.")
+                continue
+
+            prompt, job_id = build_template_prompt(row, template_structure)
+
+            if not prompt:
+                st.warning(f"Could not build prompt for Job ID {job_id}. Skipping this row.")
+                continue
 
             generated_content = generate_content_with_retry(prompt, job_id)
 
