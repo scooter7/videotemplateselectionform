@@ -6,7 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import anthropic
 
-# Initialize the Anthropic client with the correct API key
+# Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
@@ -86,7 +86,7 @@ def load_google_sheet(sheet_id):
     gc = gspread.authorize(credentials)
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())  # Ensure pandas is used correctly here
+        data = pd.DataFrame(sheet.get_all_records())
         return data
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
@@ -176,9 +176,9 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
             # Correcting the message format to be a list of dictionaries, as required by the API
             message = client.completions.create(
                 model="claude-3-5-sonnet-20240620",  # Use the Claude model
-                max_tokens=1000,
+                max_tokens_to_sample=1000,
                 temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
+                prompt=prompt
             )
             
             if message['completion']:
@@ -188,7 +188,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 
             content_clean = clean_text(content)
             return {
-                "Text01": content_clean[:100],  # Splitting content dynamically based on limits
+                "Text01": content_clean[0:100],
                 "Text01-1": content_clean[100:200],
                 "Text02": content_clean[200:300],
                 "Text02-1": content_clean[300:400]
