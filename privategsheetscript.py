@@ -5,15 +5,13 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
+# Helper function to clean Job IDs
 def clean_job_id(job_id):
     if not job_id:
         return None
-    match = re.search(r'\(([\d-]+-[a-zA-Z]+)\)', job_id)
-    if match:
-        return match.group(1).strip().lower()
-    else:
-        return job_id.strip().lower()
+    return job_id.strip().lower()
 
+# Update Google Sheet with generated content and social media content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -34,12 +32,14 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
 
+                # Update content in relevant columns based on template structure
                 sheet.update_acell(f'H{row_index}', generated_content['Text01'])  # Column H
                 sheet.update_acell(f'I{row_index}', generated_content['Text01-1'])  # Column I
                 sheet.update_acell(f'N{row_index}', generated_content['Text02'])  # Column N
                 sheet.update_acell(f'O{row_index}', generated_content['Text02-1'])  # Column O
                 time.sleep(1)
 
+                # Update social media content if present
                 if social_media_content:
                     sm_columns = {
                         "LinkedIn-Post-Content-Reco": 'BU',
@@ -73,6 +73,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
             return False
 
+# Load Google Sheet data
 @st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -81,12 +82,13 @@ def load_google_sheet(sheet_id):
     gc = gspread.authorize(credentials)
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())  # Ensure pandas is used correctly here
+        data = pd.DataFrame(sheet.get_all_records())
         return data
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame()
 
+# Load template data from CSV file
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -97,6 +99,7 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
+# Clean text content to remove unwanted characters
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -111,16 +114,9 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Extract template structure based on the selected template
 def extract_template_structure(selected_template, examples_data):
-    if "template_SH_" in selected_template:
-        try:
-            template_number = int(selected_template.split('_')[-1])
-            template_number_str = f"{template_number:02d}"
-        except ValueError:
-            template_number_str = "01"
-    else:
-        template_number_str = "01"
-
+    template_number_str = selected_template.split('_')[-1] if "template_SH_" in selected_template else "01"
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
@@ -134,6 +130,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+# Build prompt for content generation based on template
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -164,10 +161,11 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
+# Retry function for content generation
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            message = f"Generated content for {job_id}: {prompt}"
+            # This section would use your actual API call for content generation (e.g., OpenAI, Anthropic, etc.)
             content = {
                 "Text01": f"Generated headline for {job_id}",
                 "Text01-1": f"Generated sub-headline for {job_id}",
@@ -182,6 +180,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 
     return None
 
+# Retry function for social media content generation
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
