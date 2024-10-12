@@ -99,7 +99,7 @@ def build_template_prompt(sheet_row, template_structure):
     return prompt, job_id
 
 # Generate main content with retries
-def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
+def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
     for i in range(retries):
         try:
             message = client.messages.create(
@@ -115,13 +115,25 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            return content_clean
+
+            # Split the generated content into sections based on the template structure
+            generated_content = {}
+            content_lines = content_clean.split("\n")
+
+            for idx, (section_name, section_template) in enumerate(template_structure):
+                if idx < len(content_lines):
+                    generated_content[section_name] = content_lines[idx].strip()
+                else:
+                    generated_content[section_name] = ""
+
+            return generated_content
         
         except anthropic.APIError as e:
             st.warning(f"Error generating content for Job ID {job_id}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
             time.sleep(delay)
 
     return None
+
 
 # Generate social media content based on the main content
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
@@ -284,10 +296,10 @@ def main():
                 st.warning(f"Could not build prompt for Job ID {job_id}. Skipping this row.")
                 continue
 
-            generated_content = generate_content_with_retry(prompt, job_id)
+            generated_content = generate_content_with_retry(prompt, job_id, template_structure)
 
             if generated_content:
-                social_media_content = generate_social_content_with_retry(generated_content, selected_channels)
+                social_media_content = generate_social_content_with_retry(generated_content['Text01'], selected_channels)
                 update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
 
 if __name__ == "__main__":
