@@ -5,6 +5,15 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
+possible_columns = [
+    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
+    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
+    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
+    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
+    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
+    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
+]
+
 # Helper function to clean Job IDs
 def clean_job_id(job_id):
     if not job_id:
@@ -123,12 +132,23 @@ def extract_template_structure(selected_template, examples_data):
         return None
 
     template_structure = []
-    for col in example_row.columns:
-        text_element = example_row[col].values[0]
-        if pd.notna(text_element):
-            template_structure.append((col, text_element))
+    for col in possible_columns:
+        if col in example_row.columns:
+            text_element = example_row[col].values[0]
+            if pd.notna(text_element):
+                template_structure.append((col, text_element))
 
     return template_structure
+
+# Enforce character limits
+def enforce_character_limit(content, max_chars):
+    relaxed_limit = max_chars + 20  # Relax the limit by 20 characters
+    if len(content) > relaxed_limit:
+        truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
+        if not truncated_content:  # If truncating removes all content, fallback to strict character limit cut
+            return content[:max_chars].rstrip() + "..."
+        return truncated_content + "..."
+    return content
 
 # Build prompt for content generation based on template
 def build_template_prompt(sheet_row, template_structure):
@@ -138,36 +158,53 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
+    prompt = f"Generate content for Job ID {job_id} using the theme:\n\n{topic_description}\n\n"
     
     prompt += "For each section, generate content in strict order according to the following structure. Ensure you stay within the given character limits:\n\n"
 
+    umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-        prompt += f"{section_name}: {max_chars} characters limit.\n"
+        if '-' not in section_name:
+            umbrella_sections[section_name] = section_name
+            prompt += f"Section {section_name}: Generate content based only on the theme. Stay within {max_chars} characters.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"Section {section_name}: Extract a **distinct part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Stay within {max_chars} characters.\n"
+
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
 
     return prompt, job_id
 
-# Retry function for content generation
+# Retry content generation in case of errors
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            # This section would use your actual API call for content generation (e.g., OpenAI, Anthropic, etc.)
-            content = {
-                "Text01": f"Custom headline based on the theme of Job ID {job_id}",
-                "Text01-1": f"Custom sub-headline based on the theme of Job ID {job_id}",
-                "Text02": f"Custom description based on the theme of Job ID {job_id}",
-                "Text02-1": f"Additional details based on the theme of Job ID {job_id}"
-            }
-            return content
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20240620",
+                max_tokens=1000,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            if message.content and len(message.content) > 0:
+                content = message.content[0].text
+            else:
+                content = "No content generated."
+
+            return {"Job ID": job_id, **clean_text(content)}
         
-        except Exception as e:
-            st.warning(f"Error occurred: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-            time.sleep(delay)
+        except anthropic.APIError as e:
+            if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                time.sleep(delay)
+            else:
+                st.error(f"Error generating content: {e}")
+                return None
 
-    return None
-
-# Retry function for social media content generation
+# Retry social media content generation
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     social_prompts = {
         "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
@@ -178,11 +215,22 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     for channel in selected_channels:
         for i in range(retries):
             try:
-                generated_content[channel] = f"{channel.capitalize()} post based on the theme: {main_content}"
-                break
-            except Exception as e:
-                st.warning(f"Error generating {channel} content: {e}. Retrying...")
-                time.sleep(delay)
+                prompt = social_prompts[channel]
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20240620",
+                    max_tokens=500,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                if message.content and len(message.content) > 0:
+                    generated_content[channel] = message.content[0].text
+                break  # Break the retry loop if successful
+            
+            except anthropic.APIError as e:
+                if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                    st.warning(f"Error generating {channel} content: {e}. Retrying...")
+                    time.sleep(delay)
     
     return generated_content
 
