@@ -6,7 +6,6 @@ from google.oauth2.service_account import Credentials
 import gspread
 import time
 
-# Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
@@ -64,7 +63,6 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
-# Function to load data from a Google Sheet
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -88,7 +86,6 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
-# Clean text to remove unnecessary characters
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -103,7 +100,6 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Extract template structure from the examples
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -114,7 +110,7 @@ def extract_template_structure(selected_template, examples_data):
     else:
         template_number_str = "01"
 
-    example_row = examples_data[examples_data['Selected-Template'] == f'template_SH_{template_number_str}']
+    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
     
     if example_row.empty:
         return None
@@ -128,7 +124,6 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-# Enforce a character limit for generated content
 def enforce_character_limit(content, max_chars):
     relaxed_limit = max_chars + 20
     if len(content) > relaxed_limit:
@@ -138,7 +133,6 @@ def enforce_character_limit(content, max_chars):
         return truncated_content + "..."
     return content
 
-# Build the prompt for template-based content generation
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -169,12 +163,11 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Function to handle retries when generating content
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
             message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",  # Use the Claude model
+                model="claude-3-5-sonnet-20240620",
                 max_tokens=1000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -197,7 +190,6 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 
     return None
 
-# Function to update the target Google Sheet with generated content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -205,22 +197,18 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
     gc = gspread.authorize(credentials)
     
     try:
-        # Open the target sheet to populate
         sheet = gc.open_by_key(sheet_id).sheet1
         rows = sheet.get_all_values()
 
-        # Find the row that matches the Job ID
         for i, row in enumerate(rows):
-            if row[1].strip().lower() == job_id.strip().lower():  # Assuming Job ID is in column B
-                row_index = i + 1  # Sheet rows are 1-indexed
+            if row[1].strip().lower() == job_id.strip().lower():
+                row_index = i + 1
 
-                # Update text content in columns H-BS
                 for idx, content in enumerate(generated_content):
                     column_letter = chr(72 + idx)
                     sheet.update_acell(f'{column_letter}{row_index}', content)
                     time.sleep(1)
 
-                # Update social media content in columns BU-BZ
                 social_media_columns = ["BU", "BV", "BW", "BX", "BY", "BZ"]
                 for idx, (channel, social_content) in enumerate(social_media_content.items()):
                     column_letter = social_media_columns[idx]
@@ -237,12 +225,10 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
     except Exception as e:
         st.error(f"An error occurred while updating the Google Sheet: {e}")
 
-# Main application function
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    # Load data if not already stored in session_state
     if 'sheet_data' not in st.session_state:
         st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
 
@@ -258,7 +244,6 @@ def main():
 
     st.dataframe(sheet_data)
 
-    # Ensure session state management for content generation
     if 'generated_contents' not in st.session_state:
         st.session_state['generated_contents'] = []
 
@@ -298,7 +283,6 @@ def main():
     st.markdown("---")
     st.header("Update Google Sheet with Generated Content")
 
-    # Input for the target Google Sheet ID
     sheet_id = st.text_input("Enter the target Google Sheet ID", "1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8")
 
     if st.button("Update Google Sheet"):
