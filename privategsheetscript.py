@@ -173,27 +173,28 @@ def build_template_prompt(sheet_row, template_structure):
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
-            message = client.messages.create(
+            # Correcting the message format to be a list of dictionaries, as required by the API
+            message = client.completions.create(
                 model="claude-3-5-sonnet-20240620",  # Use the Claude model
                 max_tokens=1000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
             
-            if message.content and len(message.content) > 0:
-                content = message.content[0].text
+            if message['completion']:
+                content = message['completion']
             else:
                 content = "No content generated."
 
             content_clean = clean_text(content)
             return {
-                "Text01": "PartsSource Moves",
-                "Text01-1": "PartsSource",
-                "Text02": "Relocating HQ to Hudson, Ohio: 70,000 sq ft",
-                "Text02-1": "Relocating HQ to Hudson, Ohio"
+                "Text01": content_clean[:100],  # Splitting content dynamically based on limits
+                "Text01-1": content_clean[100:200],
+                "Text02": content_clean[200:300],
+                "Text02-1": content_clean[300:400]
             }
         
-        except Exception as e:
+        except anthropic.APIError as e:
             st.warning(f"Error occurred: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
             time.sleep(delay)
 
