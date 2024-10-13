@@ -87,7 +87,6 @@ def extract_template_structure(selected_template, examples_data):
     return template_structure
 
 def build_template_prompt(sheet_row, template_structure):
-def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
 
