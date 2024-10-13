@@ -158,6 +158,40 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
 
     return None
 
+# Generate social media content based on the main content
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
+        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
+        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
+    }
+    
+    generated_content = {}
+    
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                prompt = social_prompts[channel]
+                
+                # Make the API call to generate the social media content
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20240620",  # Adjust the model as needed
+                    max_tokens=500,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                # Check if content was generated and add it to the result dictionary
+                if message.content and len(message.content) > 0:
+                    generated_content[channel] = message.content[0].text
+                break  # Break out of retry loop on success
+            
+            except anthropic.APIError as e:
+                st.warning(f"Error generating {channel} content: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                time.sleep(delay)
+    
+    return generated_content
+
 def map_generated_content_to_cells(generated_content):
     """Map each section to its corresponding cell in the Google Sheet."""
     mapping = {
