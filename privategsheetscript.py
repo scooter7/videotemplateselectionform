@@ -53,7 +53,6 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Extract the template structure and max characters per section from the CSV
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -93,7 +92,7 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Function to split the generated content into sections and subsections
+# Function to split content into subsections based on logical breaks
 def split_content_into_subsections(content, section_limits):
     words = content.split()
     subsections = {}
@@ -112,7 +111,6 @@ def split_content_into_subsections(content, section_limits):
 
     return subsections
 
-# Generate content and split it based on the template structure
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -139,7 +137,6 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
-# Map structured content to Google Sheet cells based on the umbrella model
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
         "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
