@@ -23,11 +23,10 @@ def load_google_sheet(sheet_id):
     gc = gspread.authorize(credentials)
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())
-        return data
+        return sheet
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return pd.DataFrame()
+        return None
 
 @st.cache_data
 def load_template_csv():
@@ -151,6 +150,47 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
             sheet.update_acell(f'{col_letter}{row_index}', content)
             time.sleep(1)
 
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, retries=3):
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    
+    job_id_normalized = clean_job_id(job_id)
+
+    try:
+        sheet = gc.open_by_key(sheet_id).sheet1
+        rows = sheet.get_all_values()
+
+        for i, row in enumerate(rows):
+            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
+            if not job_id_in_sheet:
+                continue
+            
+            if job_id_in_sheet == job_id_normalized:
+                row_index = i + 1
+
+                if generated_content:
+                    map_content_to_google_sheet(sheet, row_index, generated_content)
+
+                st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
+                return True
+
+        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
+        return False
+
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+        return False
+    except gspread.exceptions.APIError as e:
+        if retries > 0 and e.response.status_code == 500:
+            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
+            time.sleep(5)
+            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, retries-1)
+        else:
+            st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
+            return False
+
 def main():
     st.title("AI Script and Social Media Content Generator")
     st.markdown("---")
@@ -158,13 +198,14 @@ def main():
     sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
     request_sheet_id = '1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8'
 
-    sheet_data = load_google_sheet(request_sheet_id)
+    sheet = load_google_sheet(request_sheet_id)
     examples_data = load_template_csv()
 
-    if sheet_data.empty or examples_data.empty:
+    if sheet is None or examples_data.empty:
         st.error("No data available from the request Google Sheet or the examples CSV.")
         return
 
+    sheet_data = pd.DataFrame(sheet.get_all_records())
     st.dataframe(sheet_data)
 
     if 'generated_contents' not in st.session_state:
@@ -193,7 +234,7 @@ def main():
             generated_content = generate_and_split_content(prompt, job_id, template_structure)
 
             if generated_content:
-                map_content_to_google_sheet(sheet, idx + 1, generated_content)
+                update_google_sheet_with_generated_content(sheet_id, job_id, generated_content)
 
 if __name__ == "__main__":
     main()
