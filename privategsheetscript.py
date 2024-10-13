@@ -47,10 +47,10 @@ def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
         "[" 
-        u"\U0001F600-\U0001F64F"
-        u"\U0001F300-\U0001F5FF"
-        u"\U0001F680-\U0001F6FF"
-        u"\U0001F1E0-\U0001F1FF"
+        u"\U0001F600-\U0001F64F"  
+        u"\U0001F300-\U0001F5FF"  
+        u"\U0001F680-\U0001F6FF"  
+        u"\U0001F1E0-\U0001F1FF"  
         u"\U00002702-\U000027B0"
         u"\U000024C2-\U0001F251"
         "]+", flags=re.UNICODE
@@ -59,17 +59,13 @@ def clean_text(text):
 
 # Extract template structure from the examples CSV
 def extract_template_structure(selected_template, examples_data):
-    if "template_SH_" in selected_template:
-        try:
-            template_number = int(selected_template.split('_')[-1])
-            template_number_str = f"{template_number:02d}"
-        except ValueError:
-            template_number_str = "01"
-    else:
+    try:
+        template_number_str = selected_template.split('_')[-1].strip()
+        example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
+    except:
         template_number_str = "01"
+        example_row = examples_data[examples_data['Template'] == f'template_SH_01']
 
-    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
-    
     if example_row.empty:
         return None
 
@@ -77,7 +73,7 @@ def extract_template_structure(selected_template, examples_data):
     for col in example_row.columns:
         text_element = example_row[col].values[0]
         if pd.notna(text_element):
-            template_structure[col] = len(text_element)
+            template_structure[col] = len(text_element)  # Store character limits from examples
 
     return template_structure
 
@@ -190,6 +186,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
     
     return generated_content
 
+# Main function to update Google Sheets with content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
