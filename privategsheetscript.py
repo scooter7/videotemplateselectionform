@@ -157,7 +157,6 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
-    # Log what content is being processed
     st.write(f"Processing Job ID: {job_id}")
 
     # Iterate over all rows to find the matching Job ID
