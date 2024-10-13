@@ -17,10 +17,12 @@ def clean_job_id(job_id):
 
 @st.cache_data
 def load_google_sheet(sheet_id):
+    # Google Sheets authentication
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     gc = gspread.authorize(credentials)
+    
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
         return sheet
