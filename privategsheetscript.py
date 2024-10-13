@@ -181,9 +181,9 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                 break
             
             except anthropic.APIError as e:
-                st.warning(f"Error generating {channel} content: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                st.warning(f"Error generating {channel} content: {e}. Retrying...")
                 time.sleep(delay)
-    
+
     return generated_content
 
 # Main function to update Google Sheets with content
