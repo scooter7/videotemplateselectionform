@@ -203,13 +203,14 @@ def main():
     st.markdown("---")
 
     # Load data only if not already stored in session_state
-    if 'sheet_data' not in st.session_state:
-        st.session_state['sheet_data'], sheet = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+    if 'sheet_data' not in st.session_state or 'sheet' not in st.session_state:
+        st.session_state['sheet_data'], st.session_state['sheet'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     if 'examples_data' not in st.session_state:
         st.session_state['examples_data'] = load_examples()
 
     sheet_data = st.session_state['sheet_data']
     examples_data = st.session_state['examples_data']
+    sheet = st.session_state['sheet']
 
     if sheet_data.empty or examples_data.empty:
         st.error("No data available from Google Sheets or Templates CSV.")
