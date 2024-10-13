@@ -180,6 +180,23 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
+# Map generated content to Google Sheet cells
+def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
+    rows = sheet.get_all_values()
+
+    # Find the row with the matching Job ID
+    for i, row in enumerate(rows):
+        if row[1] == job_id:  # Assuming Job ID is in the second column (index 1)
+            row_index = i + 1
+            for section_name, content in template_structure:
+                content_to_write = generated_content.get(section_name, "")
+                col_letter = possible_columns.index(section_name) + 1  # Get the column index for the section
+                try:
+                    sheet.update_acell(f'{col_letter}{row_index}', content_to_write)
+                except Exception as e:
+                    st.error(f"Failed to update cell {col_letter}{row_index} for Job ID {job_id}: {e}")
+            break
+
 # Main function
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
@@ -187,7 +204,7 @@ def main():
 
     # Load data only if not already stored in session_state
     if 'sheet_data' not in st.session_state:
-        st.session_state['sheet_data'], _ = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+        st.session_state['sheet_data'], sheet = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     if 'examples_data' not in st.session_state:
         st.session_state['examples_data'] = load_examples()
 
@@ -221,6 +238,9 @@ def main():
             generated_content = generate_content_with_retry(prompt, job_id)
             if generated_content:
                 generated_contents.append(generated_content)
+
+            # Map generated content to Google Sheet
+            map_generated_content_to_cells(sheet, job_id, generated_content, template_structure)
 
         st.session_state['generated_contents'] = generated_contents
         full_content = "\n\n".join(generated_contents)
