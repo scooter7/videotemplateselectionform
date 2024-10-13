@@ -184,15 +184,17 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
     rows = sheet.get_all_values()
 
+    # Clean up the content by removing "Section" from the generated content
+    cleaned_content = re.sub(r"Section\s+", "", generated_content)
+
     # Find the row with the matching Job ID
     for i, row in enumerate(rows):
         if row[1] == job_id:  # Assuming Job ID is in the second column (index 1)
             row_index = i + 1
             for section_name, content in template_structure:
-                content_to_write = generated_content.get(section_name, "")
                 col_letter = possible_columns.index(section_name) + 1  # Get the column index for the section
                 try:
-                    sheet.update_acell(f'{col_letter}{row_index}', content_to_write)
+                    sheet.update_acell(f'{col_letter}{row_index}', cleaned_content)
                 except Exception as e:
                     st.error(f"Failed to update cell {col_letter}{row_index} for Job ID {job_id}: {e}")
             break
