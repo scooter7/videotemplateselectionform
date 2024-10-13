@@ -157,18 +157,19 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
-    # Debug: Output generated content before mapping
-    st.write("Generated Content:", generated_content)
+    # Log what content is being processed
+    st.write(f"Processing Job ID: {job_id}")
 
-    # Find the correct row based on Job ID and update the Google Sheet
+    # Iterate over all rows to find the matching Job ID
     for i, row in enumerate(rows):
         job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
         if job_id_in_sheet == job_id_normalized:
-            row_index = i + 1  # Because rows in Sheets start at 1
+            row_index = i + 1
 
-            # Debug: Output row index for checking
-            st.write(f"Updating row {row_index} for Job ID {job_id}")
+            # Log the row where content will be updated
+            st.write(f"Found Job ID at row {row_index}. Updating content.")
 
+            # Loop through each section in the template and update cells
             for section_name, _ in template_structure:
                 if section_name in generated_content:
                     col_letter = column_mappings.get(section_name)
