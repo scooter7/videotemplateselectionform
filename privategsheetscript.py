@@ -87,18 +87,28 @@ def extract_template_structure(selected_template, examples_data):
     return template_structure
 
 def build_template_prompt(sheet_row, template_structure):
+def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
 
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"""You are an AI assistant. Generate content for Job ID {job_id} based on the description provided. Follow the section structure exactly as given below. For each section, start with 'Section {{Section Name}}:' on a new line, and then provide the content. Ensure that the content of the umbrella sections is divided verbatim into subsections.
+    prompt = f"""You are an AI assistant. Generate content for Job ID {job_id} based on the description provided.
 
-Description:
+**Instructions:**
+
+- Follow the section structure exactly as given below.
+- For each umbrella section, write a coherent paragraph based on the description.
+- For each subsection, extract a meaningful part of the umbrella section's content, maintaining the original order.
+- Subsections should be complete sentences or meaningful phrases, not just individual words.
+- Do not introduce new content or reorder sections.
+- Start each section with 'Section {{Section Name}}:' on a new line, followed by the content.
+
+**Description:**
 {topic_description}
 
-Sections:"""
+**Sections and Character Limits:**"""
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -111,8 +121,21 @@ Sections:"""
             if umbrella_key in umbrella_sections:
                 prompt += f"\n  - {section_name} (subsection of {umbrella_sections[umbrella_key]}, max {max_chars} characters)"
 
-    prompt += "\n\nPlease provide the content for each section accordingly."
+    prompt += """
 
+**Example Format:**
+
+Section Text01:
+[Umbrella section content]
+
+Section Text01-1:
+[Subsection content that is a meaningful part of Text01]
+
+Section Text01-2:
+[Another meaningful part of Text01]
+
+Please generate the content accordingly."""
+    
     return prompt, job_id
 
 def parse_generated_content(content, job_id):
@@ -153,19 +176,19 @@ def generate_and_split_content(prompt, job_id, retries=3, delay=5):
 
 def map_content_to_google_sheet(sheet, row_index, structured_content, job_id):
     mapping = {
-        "Section Text01": "H", "Section Text01-1": "I", "Section Text01-2": "J", "Section Text01-3": "K", "Section Text01-4": "L", "Section 01BG-Theme-Text": "M",
-        "Section Text02": "N", "Section Text02-1": "O", "Section Text02-2": "P", "Section Text02-3": "Q", "Section Text02-4": "R", "Section 02BG-Theme-Text": "S",
-        "Section Text03": "T", "Section Text03-1": "U", "Section Text03-2": "V", "Section Text03-3": "W", "Section Text03-4": "X", "Section 03BG-Theme-Text": "Y",
-        "Section Text04": "Z", "Section Text04-1": "AA", "Section Text04-2": "AB", "Section Text04-3": "AC", "Section Text04-4": "AD", "Section 04BG-Theme-Text": "AE",
-        "Section Text05": "AF", "Section Text05-1": "AG", "Section Text05-2": "AH", "Section Text05-3": "AI", "Section Text05-4": "AJ", "Section 05BG-Theme-Text": "AK",
-        "Section CTA-Text": "AL", "Section CTA-Text-1": "AM", "Section CTA-Text-2": "AN", "Section Tagline-Text": "AO"
+        # ... [Your existing mapping here]
     }
 
     for section, content in structured_content.items():
         if section in mapping:
             col_letter = mapping[section]
-            sheet.update_acell(f'{col_letter}{row_index}', content)
-            time.sleep(1)
+            cell = f'{col_letter}{row_index}'
+            try:
+                sheet.update_acell(cell, content)
+                st.write(f"Updated cell {cell} with content: {content}")
+                time.sleep(1)
+            except Exception as e:
+                st.error(f"Error updating cell {cell} for Job ID {job_id}: {e}")
         else:
             st.warning(f"Unrecognized section '{section}' for Job ID {job_id}.")
 
@@ -180,14 +203,26 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
         rows = sheet.get_all_values()
+        if not rows:
+            st.error("Target sheet is empty.")
+            return False
 
-        for i, row in enumerate(rows):
-            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
+        headers = rows[0]
+        st.write(f"Headers: {headers}")
+        try:
+            job_id_column_index = headers.index('Job ID')
+        except ValueError:
+            st.error("Job ID column not found in the target sheet.")
+            return False
+
+        for i, row in enumerate(rows[1:], start=2):  # Skip header row
+            job_id_in_sheet = row[job_id_column_index].strip().lower() if len(row) > job_id_column_index and row[job_id_column_index].strip() else None
+            st.write(f"Checking row {i}: job_id_in_sheet = '{job_id_in_sheet}', job_id_normalized = '{job_id_normalized}'")
             if not job_id_in_sheet:
                 continue
-            
+
             if job_id_in_sheet == job_id_normalized:
-                row_index = i + 1
+                row_index = i
                 if generated_content:
                     map_content_to_google_sheet(sheet, row_index, generated_content, job_id)
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
@@ -196,17 +231,9 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
         return False
 
-    except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+    except Exception as e:
+        st.error(f"An error occurred while updating the Google Sheet: {e}")
         return False
-    except gspread.exceptions.APIError as e:
-        if retries > 0 and e.response.status_code == 500:
-            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
-            time.sleep(5)
-            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, retries-1)
-        else:
-            st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
-            return False
 
 def main():
     st.title("AI Script and Content Generator")
