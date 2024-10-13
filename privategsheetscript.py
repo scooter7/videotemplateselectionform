@@ -152,7 +152,7 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
     # Find the row with the matching Job ID
     matched_row = None
     for i, row in enumerate(rows):
-        st.write(f"Checking row {i} with Job ID: {row[2]}")  # Changed index from 1 to 2 to correctly reference the Job ID column
+        st.write(f"Checking row {i} with Job ID: {row[2]}")  # Checking the correct column for Job ID
         if row[2].strip().lower() == job_id.strip().lower():  # Matching the Job ID in a case-insensitive manner
             matched_row = i + 1  # Get the row index (1-based for Google Sheets)
             break
@@ -163,9 +163,20 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
         st.error(f"Job ID {job_id} not found in Google Sheet!")
         return
 
-    # Clean up the content and prepare for insertion
+    # Clean up the content and split it based on sections
+    # Assuming the generated content includes "Section Text01", "Section Text02", etc.
+    section_contents = {}
+    
+    # Split content by 'Section Text' (adapt this if necessary to match your generated content format)
+    sections = re.split(r'Section\s+(\w+)', generated_content)  # Split by 'Section Text01', etc.
+    for i in range(1, len(sections), 2):
+        section_name = sections[i].strip()
+        section_content = sections[i + 1].strip()
+        section_contents[section_name] = section_content
+    
+    # Now we can map section_contents to the appropriate columns
     for section_name, _ in template_structure:
-        section_content = generated_content.get(section_name, "").strip()
+        section_content = section_contents.get(section_name, "").strip()
         col_letter = possible_columns.index(section_name) + 1  # Find the correct column
         cell = f"{col_letter}{matched_row}"
         
