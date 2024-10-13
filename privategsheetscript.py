@@ -51,7 +51,7 @@ def load_template_csv():
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
-        "[" 
+        "["
         u"\U0001F600-\U0001F64F"
         u"\U0001F300-\U0001F5FF"
         u"\U0001F680-\U0001F6FF"
@@ -93,26 +93,25 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given, ensuring that the content of the umbrella sections is divided verbatim into subsections.\n\n"
-    
-    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "For each section, generate content in strict order. Subsections must split the umbrella section verbatim into distinct, meaningful parts. Do not reorder sections or introduce new content:\n\n"
+    prompt = f"""You are an AI assistant. Generate content for Job ID {job_id} based on the description provided. Follow the section structure exactly as given below. For each section, start with 'Section {{Section Name}}:' on a new line, and then provide the content. Ensure that the content of the umbrella sections is divided verbatim into subsections.
+
+Description:
+{topic_description}
+
+Sections:"""
 
     umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
-            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
+            prompt += f"\n- {section_name} (max {max_chars} characters)"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a distinct, verbatim part of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and no new content is introduced.\n"
+                prompt += f"\n  - {section_name} (subsection of {umbrella_sections[umbrella_key]}, max {max_chars} characters)"
 
-    if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
-
-    prompt += "\nStrictly generate content for every section, ensuring subsections extract distinct, verbatim parts from the umbrella content in proper order."
+    prompt += "\n\nPlease provide the content for each section accordingly."
 
     return prompt, job_id
 
@@ -122,8 +121,9 @@ def parse_generated_content(content, job_id):
     lines = content.split('\n')
     for line in lines:
         line = line.strip()
-        if line.startswith('Section'):
-            current_section = line.split(':')[0].strip()
+        match = re.match(r'^Section\s+(.+?):$', line)
+        if match:
+            current_section = f"Section {match.group(1)}"
             sections[current_section] = ''
         elif current_section:
             sections[current_section] += line + ' '
@@ -142,6 +142,7 @@ def generate_and_split_content(prompt, job_id, retries=3, delay=5):
                 stop_sequences=[anthropic.HUMAN_PROMPT],
             )
             content = response.completion.strip()
+            st.write(f"Generated content for Job ID {job_id}:\n{content}")
             content_clean = clean_text(content)
             structured_content = parse_generated_content(content_clean, job_id)
             return structured_content
@@ -165,6 +166,8 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
             col_letter = mapping[section]
             sheet.update_acell(f'{col_letter}{row_index}', content)
             time.sleep(1)
+        else:
+            st.warning(f"Unrecognized section '{section}' for Job ID {job_id}.")
 
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, retries=3):
     credentials_info = st.secrets["google_credentials"]
