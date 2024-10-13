@@ -168,7 +168,7 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
             # Log the row where content will be updated
             st.write(f"Found Job ID at row {row_index}. Updating content.")
 
-            # Loop through each section in the template and update cells
+            # Loop through each section in the template structure and update Google Sheet
             for section_name, _ in template_structure:
                 if section_name in generated_content:
                     col_letter = column_mappings.get(section_name)
