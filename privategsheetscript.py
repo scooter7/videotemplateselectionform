@@ -142,6 +142,14 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
+# Test Google Sheets write access
+def test_google_sheet_write(sheet):
+    try:
+        sheet.update_acell('H2', 'Test content from Streamlit')  # Replace 'H2' with any cell
+        st.success("Successfully wrote to the Google Sheet!")
+    except Exception as e:
+        st.error(f"Failed to write to the Google Sheet: {e}")
+
 # Map generated content to Google Sheet cells
 def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
     job_id_normalized = job_id.strip().lower()
@@ -174,11 +182,12 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
                         st.write(f"Updating cell {col_letter}{row_index} with content: {content}")
                         try:
                             sheet.update_acell(f'{col_letter}{row_index}', content)
+                            st.write(f"Successfully updated {col_letter}{row_index} with content: {content}")
                         except Exception as e:
                             st.error(f"Failed to update cell {col_letter}{row_index}: {e}")
                         time.sleep(1)  # To avoid rate-limiting
             break
-            
+
 # Main function
 def main():
     st.title("AI Script Generator with Google Sheets Transfer")
@@ -195,6 +204,9 @@ def main():
         return
 
     st.dataframe(sheet_data)
+
+    # Test Google Sheet writing
+    test_google_sheet_write(sheet)
 
     if st.button("Generate and Transfer Content"):
         for idx, row in sheet_data.iterrows():
@@ -215,6 +227,7 @@ def main():
             generated_content = generate_content_with_retry(prompt, row['Job ID'])
             if generated_content:
                 st.text_area(f"Generated Content for Job ID {job_id}", generated_content)
+                st.write("Generated content structure:", generated_content)  # Add this for debugging
                 map_generated_content_to_cells(sheet, row['Job ID'], generated_content, template_structure)
 
 if __name__ == "__main__":
