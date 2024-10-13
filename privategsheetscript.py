@@ -10,44 +10,6 @@ import time
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-# Custom CSS for styling
-st.markdown(
-    """
-    <style>
-    .st-emotion-cache-12fmjuu.ezrtsby2 {
-        display: none;
-    }
-    .logo-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    .logo-container img {
-        width: 600px;
-    }
-    .app-container {
-        border-left: 5px solid #58258b;
-        border-right: 5px solid #58258b;
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
-        color: #42145f;
-    }
-    .stButton button {
-        background-color: #fec923;
-        color: #42145f;
-    }
-    .stButton button:hover {
-        background-color: #42145f;
-        color: #fec923;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # Define columns to be updated in the Google Sheet
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
@@ -184,19 +146,37 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
     rows = sheet.get_all_values()
 
-    # Clean up the content by removing "Section" from the generated content
-    cleaned_content = re.sub(r"Section\s+", "", generated_content)
-
+    # Logging rows for debugging
+    st.write(f"Sheet Rows: {rows}")
+    
     # Find the row with the matching Job ID
+    matched_row = None
     for i, row in enumerate(rows):
-        if row[1] == job_id:  # Assuming Job ID is in the second column (index 1)
-            row_index = i + 1
-            for section_name, content in template_structure:
-                col_letter = possible_columns.index(section_name) + 1  # Get the column index for the section
-                try:
-                    sheet.update_acell(f'{col_letter}{row_index}', cleaned_content)
-                except Exception as e:
-                    st.error(f"Failed to update cell {col_letter}{row_index} for Job ID {job_id}: {e}")
+        st.write(f"Checking row {i} with Job ID: {row[1]}")
+        if row[1].strip().lower() == job_id.strip().lower():  # Matching the Job ID in a case-insensitive manner
+            matched_row = i + 1  # Get the row index (1-based for Google Sheets)
+            break
+    
+    if matched_row:
+        st.write(f"Matched Job ID at row: {matched_row}")
+    else:
+        st.error(f"Job ID {job_id} not found in Google Sheet!")
+        return
+
+    # Clean up the content and prepare for insertion
+    for section_name, _ in template_structure:
+        section_content = generated_content.get(section_name, "").strip()
+        col_letter = possible_columns.index(section_name) + 1  # Find the correct column
+        cell = f"{col_letter}{matched_row}"
+        
+        # Log the cell and content being updated
+        st.write(f"Updating cell {cell} with content: {section_content}")
+        
+        try:
+            sheet.update_acell(cell, section_content)
+            st.success(f"Successfully updated cell {cell} with content: {section_content}")
+        except Exception as e:
+            st.error(f"Failed to update cell {cell}: {e}")
             break
 
 # Main function
@@ -240,10 +220,9 @@ def main():
 
             generated_content = generate_content_with_retry(prompt, job_id)
             if generated_content:
+                # Map generated content to Google Sheet
+                map_generated_content_to_cells(sheet, job_id, generated_content, template_structure)
                 generated_contents.append(generated_content)
-
-            # Map generated content to Google Sheet
-            map_generated_content_to_cells(sheet, job_id, generated_content, template_structure)
 
         st.session_state['generated_contents'] = generated_contents
         full_content = "\n\n".join(generated_contents)
