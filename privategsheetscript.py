@@ -10,11 +10,13 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
+# Helper function to clean Job IDs
 def clean_job_id(job_id):
     if not job_id:
         return None
     return job_id.strip().lower()
 
+# Load Google Sheet data
 @st.cache_data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -29,6 +31,7 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame()
 
+# Load template data from CSV file
 @st.cache_data
 def load_template_csv():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -39,6 +42,7 @@ def load_template_csv():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
+# Clean text content to remove unwanted characters
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -53,6 +57,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Extract template structure from the examples CSV
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -76,6 +81,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+# Build the prompt for content generation based on the template structure
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -91,7 +97,7 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Function to split content into subsections based on logical breaks
+# Function to split content into subsections based on character limits
 def split_content_into_subsections(content, section_limits):
     words = content.split()
     subsections = {}
@@ -136,6 +142,7 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
+# Map generated content to corresponding cells in Google Sheets
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
         "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
