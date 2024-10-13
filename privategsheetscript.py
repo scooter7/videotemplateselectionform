@@ -152,8 +152,8 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
     # Find the row with the matching Job ID
     matched_row = None
     for i, row in enumerate(rows):
-        st.write(f"Checking row {i} with Job ID: {row[1]}")
-        if row[1].strip().lower() == job_id.strip().lower():  # Matching the Job ID in a case-insensitive manner
+        st.write(f"Checking row {i} with Job ID: {row[2]}")  # Changed index from 1 to 2 to correctly reference the Job ID column
+        if row[2].strip().lower() == job_id.strip().lower():  # Matching the Job ID in a case-insensitive manner
             matched_row = i + 1  # Get the row index (1-based for Google Sheets)
             break
     
