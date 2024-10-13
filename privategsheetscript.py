@@ -157,17 +157,28 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
+    # Debug: Output generated content before mapping
+    st.write("Generated Content:", generated_content)
+
     # Find the correct row based on Job ID and update the Google Sheet
     for i, row in enumerate(rows):
         job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
         if job_id_in_sheet == job_id_normalized:
             row_index = i + 1  # Because rows in Sheets start at 1
+
+            # Debug: Output row index for checking
+            st.write(f"Updating row {row_index} for Job ID {job_id}")
+
             for section_name, _ in template_structure:
-                if section_name in generated_content and section_name in column_mappings:
-                    col_letter = column_mappings[section_name]
-                    cell_address = f'{col_letter}{row_index}'
-                    sheet.update_acell(cell_address, generated_content[section_name])
-                    time.sleep(1)  # To avoid rate limits
+                if section_name in generated_content:
+                    col_letter = column_mappings.get(section_name)
+                    content = generated_content[section_name]
+
+                    if col_letter:
+                        st.write(f"Updating cell {col_letter}{row_index} with content: {content}")
+                        sheet.update_acell(f'{col_letter}{row_index}', content)
+                        time.sleep(1)  # To avoid rate-limiting
+
             break
 
 # Main function
