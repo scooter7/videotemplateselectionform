@@ -19,6 +19,12 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
+# Function to clean Job IDs
+def clean_job_id(job_id):
+    if not job_id:
+        return None
+    return job_id.strip().lower()
+
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
