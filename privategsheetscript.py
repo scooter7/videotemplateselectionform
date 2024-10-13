@@ -151,7 +151,7 @@ def generate_and_split_content(prompt, job_id, retries=3, delay=5):
             time.sleep(delay)
     return None
 
-def map_content_to_google_sheet(sheet, row_index, structured_content):
+def map_content_to_google_sheet(sheet, row_index, structured_content, job_id):
     mapping = {
         "Section Text01": "H", "Section Text01-1": "I", "Section Text01-2": "J", "Section Text01-3": "K", "Section Text01-4": "L", "Section 01BG-Theme-Text": "M",
         "Section Text02": "N", "Section Text02-1": "O", "Section Text02-2": "P", "Section Text02-3": "Q", "Section Text02-4": "R", "Section 02BG-Theme-Text": "S",
@@ -189,7 +189,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
             if job_id_in_sheet == job_id_normalized:
                 row_index = i + 1
                 if generated_content:
-                    map_content_to_google_sheet(sheet, row_index, generated_content)
+                    map_content_to_google_sheet(sheet, row_index, generated_content, job_id)
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
                 return True
 
