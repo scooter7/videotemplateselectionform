@@ -146,7 +146,10 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
 # Get Google Sheets column letter based on index
 def get_column_letter(column_name):
     column_index = possible_columns.index(column_name)
-    return string.ascii_uppercase[7 + column_index]
+    if column_index < len(string.ascii_uppercase):
+        return string.ascii_uppercase[column_index + 7]  # Start from column H (index 7)
+    else:
+        raise ValueError(f"Column {column_name} is out of range!")
 
 # Map generated content to Google Sheets
 def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
@@ -192,8 +195,8 @@ def main():
         st.session_state['examples_data'] = load_examples()
 
     sheet_data = st.session_state['sheet_data']
-    examples_data = st.session_state['examples_data']
     sheet = st.session_state['sheet']
+    examples_data = st.session_state['examples_data']
 
     if sheet_data.empty or examples_data.empty:
         st.error("No data available from Google Sheets or Templates CSV.")
