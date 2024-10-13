@@ -68,7 +68,6 @@ def extract_template_structure(selected_template, examples_data):
     if example_row.empty:
         return None
 
-    # Return a dictionary with column names and their character limits
     template_structure = {}
     for col in example_row.columns:
         text_element = example_row[col].values[0]
