@@ -132,7 +132,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            return f"Job ID {job_id}:\n\n{content_clean}"
+            return content_clean
         
         except anthropic.APIError as e:
             if e.error.get('type') == 'overloaded_error' and i < retries - 1:
@@ -143,7 +143,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 return None
 
 # Map generated content to Google Sheet cells
-def map_generated_content_to_cells(sheet, job_id, generated_content):
+def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
     job_id_normalized = job_id.strip().lower()
     rows = sheet.get_all_values()
 
@@ -157,21 +157,22 @@ def map_generated_content_to_cells(sheet, job_id, generated_content):
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
+    # Find the correct row based on Job ID and update the Google Sheet
     for i, row in enumerate(rows):
         job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
         if job_id_in_sheet == job_id_normalized:
             row_index = i + 1  # Because rows in Sheets start at 1
-            for section, content in generated_content.items():
-                if section in column_mappings:
-                    col_letter = column_mappings[section]
+            for section_name, _ in template_structure:
+                if section_name in generated_content and section_name in column_mappings:
+                    col_letter = column_mappings[section_name]
                     cell_address = f'{col_letter}{row_index}'
-                    sheet.update_acell(cell_address, content)
-                    time.sleep(1)  # Avoiding rate limits
+                    sheet.update_acell(cell_address, generated_content[section_name])
+                    time.sleep(1)  # To avoid rate limits
             break
 
-# Streamlit app logic
+# Main function
 def main():
-    st.title("AI Script Generator and Google Sheet Updater")
+    st.title("AI Script Generator with Google Sheets Transfer")
     st.markdown("---")
 
     sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
@@ -205,7 +206,7 @@ def main():
             generated_content = generate_content_with_retry(prompt, row['Job ID'])
             if generated_content:
                 st.text_area(f"Generated Content for Job ID {job_id}", generated_content)
-                map_generated_content_to_cells(sheet, row['Job ID'], generated_content)
+                map_generated_content_to_cells(sheet, row['Job ID'], generated_content, template_structure)
 
 if __name__ == "__main__":
     main()
