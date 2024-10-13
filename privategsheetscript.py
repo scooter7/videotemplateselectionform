@@ -6,6 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import anthropic
 
+# Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
@@ -52,6 +53,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Extract the template structure and max characters per section from the CSV
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -67,6 +69,7 @@ def extract_template_structure(selected_template, examples_data):
     if example_row.empty:
         return None
 
+    # Return a dictionary with column names and their character limits
     template_structure = {}
     for col in example_row.columns:
         text_element = example_row[col].values[0]
@@ -90,6 +93,7 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
+# Function to split the generated content according to character limits
 def split_content_by_character_limits(content, section_limits):
     words = content.split()
     sections = {}
@@ -108,6 +112,7 @@ def split_content_by_character_limits(content, section_limits):
 
     return sections
 
+# Generate content and split it based on the template structure
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -134,13 +139,14 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
+# Map structured content to Google Sheet cells based on the umbrella model
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
-        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L",
-        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R",
-        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X",
-        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD",
-        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ",
+        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
+        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
+        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
+        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
+        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
