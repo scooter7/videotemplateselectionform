@@ -98,7 +98,30 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Generate main content with retries
+# Helper function to split content into subsections
+def split_content_into_sections(content, max_subsections=4):
+    words = content.split()
+    subsections = []
+    num_words = len(words)
+    
+    # Determine how many words should be in each subsection
+    words_per_subsection = max(1, num_words // max_subsections)
+    
+    for i in range(max_subsections):
+        start_idx = i * words_per_subsection
+        end_idx = (i + 1) * words_per_subsection if i < max_subsections - 1 else num_words
+        subsection_content = " ".join(words[start_idx:end_idx]).strip()
+        
+        # Only add subsection if there is content
+        if subsection_content:
+            subsections.append(subsection_content)
+
+    # Ensure subsections list is filled with empty strings if not enough content
+    while len(subsections) < max_subsections:
+        subsections.append("")
+
+    return subsections
+
 def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -118,13 +141,14 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
 
             # Split the generated content into sections based on the template structure
             generated_content = {}
-            content_lines = content_clean.split("\n")
 
-            for idx, (section_name, section_template) in enumerate(template_structure):
-                if idx < len(content_lines):
-                    generated_content[section_name] = content_lines[idx].strip()
-                else:
-                    generated_content[section_name] = ""
+            for section_name, section_template in template_structure:
+                split_sections = split_content_into_sections(content_clean, max_subsections=4)
+                for idx, subsection in enumerate(split_sections):
+                    if idx == 0:
+                        generated_content[section_name] = subsection  # e.g., Text01
+                    else:
+                        generated_content[f"{section_name}-{idx}"] = subsection  # e.g., Text01-1, Text01-2, etc.
 
             return generated_content
         
@@ -134,55 +158,14 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
 
     return None
 
-
-# Generate social media content based on the main content
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
-        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
-        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
-    }
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                message = client.messages.create(
-                    model="claude-3-5-sonnet-20240620",
-                    max_tokens=500,
-                    temperature=0.7,
-                    messages=[{"role": "user", "content": social_prompts[channel]}]
-                )
-                
-                if message.content and len(message.content) > 0:
-                    generated_content[channel] = message.content[0].text
-                break
-            
-            except anthropic.APIError as e:
-                st.warning(f"Error generating {channel} content: {e}. Retrying...")
-                time.sleep(delay)
-    
-    return generated_content
-
-# Map content to specific cells in the Google Sheet based on the template
 def map_generated_content_to_cells(generated_content):
     """Map each section to its corresponding cell in the Google Sheet."""
     mapping = {
-        # Mapping for Text01 and its variants
         "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
-        
-        # Mapping for Text02 and its variants
         "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
-        
-        # Mapping for Text03 and its variants
         "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
-        
-        # Mapping for Text04 and its variants
         "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
-        
-        # Mapping for Text05 and its variants
         "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
-        
-        # CTA and other content
         "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
