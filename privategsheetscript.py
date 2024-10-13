@@ -135,13 +135,13 @@ def generate_and_split_content(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
             response = client.completions.create(
-                model="claude-1",
+                model="claude-v1",
                 prompt=anthropic.HUMAN_PROMPT + prompt + anthropic.AI_PROMPT,
                 max_tokens_to_sample=1000,
                 temperature=0.7,
                 stop_sequences=[anthropic.HUMAN_PROMPT],
             )
-            content = response['completion'].strip()
+            content = response.completion.strip()
             content_clean = clean_text(content)
             structured_content = parse_generated_content(content_clean, job_id)
             return structured_content
