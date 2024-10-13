@@ -151,93 +151,6 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
             sheet.update_acell(f'{col_letter}{row_index}', content)
             time.sleep(1)
 
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
-        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
-        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
-    }
-    
-    generated_content = {}
-    
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = social_prompts[channel]
-                
-                message = client.messages.create(
-                    model="claude-3-5-sonnet-20240620",
-                    max_tokens=500,
-                    temperature=0.7,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                
-                if message.content and len(message.content) > 0:
-                    generated_content[channel] = message.content[0].text
-                break
-            
-            except anthropic.APIError as e:
-                st.warning(f"Error generating {channel} content: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                time.sleep(delay)
-    
-    return generated_content
-
-def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
-    credentials_info = st.secrets["google_credentials"]
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    gc = gspread.authorize(credentials)
-    
-    job_id_normalized = clean_job_id(job_id)
-
-    try:
-        sheet = gc.open_by_key(sheet_id).sheet1
-        rows = sheet.get_all_values()
-
-        for i, row in enumerate(rows):
-            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
-            if not job_id_in_sheet:
-                continue
-            
-            if job_id_in_sheet == job_id_normalized:
-                row_index = i + 1
-
-                if generated_content:
-                    map_content_to_google_sheet(sheet, row_index, generated_content)
-
-                if social_media_content:
-                    sm_columns = {
-                        "LinkedIn-Post-Content-Reco": 'BU',
-                        "Facebook-Post-Content-Reco": 'BV',
-                        "Instagram-Post-Content-Reco": 'BW',
-                        "YouTube-Post-Content-Reco": 'BX',
-                        "Blog-Post-Content-Reco": 'BY',
-                        "Email-Post-Content-Reco": 'BZ'
-                    }
-                    for channel, content in social_media_content.items():
-                        if channel in sm_columns:
-                            col_letter = sm_columns[channel]
-                            sheet.update_acell(f'{col_letter}{row_index}', content)
-                            time.sleep(1)
-                
-                st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
-                return True
-
-        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
-        return False
-
-    except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return False
-    except gspread.exceptions.APIError as e:
-        if retries > 0 and e.response.status_code == 500:
-            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
-            time.sleep(5)
-            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries-1)
-        else:
-            st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
-            return False
-
 def main():
     st.title("AI Script and Social Media Content Generator")
     st.markdown("---")
@@ -256,9 +169,6 @@ def main():
 
     if 'generated_contents' not in st.session_state:
         st.session_state['generated_contents'] = []
-
-    selected_channels = st.multiselect("Select social media channels to generate content for:", 
-                                       ["facebook", "linkedin", "instagram"])
 
     if st.button("Generate Content"):
         for idx, row in sheet_data.iterrows():
@@ -283,8 +193,7 @@ def main():
             generated_content = generate_and_split_content(prompt, job_id, template_structure)
 
             if generated_content:
-                social_media_content = generate_social_content_with_retry(generated_content['Text01'], selected_channels)
-                update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
+                map_content_to_google_sheet(sheet, idx + 1, generated_content)
 
 if __name__ == "__main__":
     main()
