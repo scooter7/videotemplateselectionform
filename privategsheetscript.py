@@ -75,6 +75,21 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+def build_template_prompt(sheet_row, template_structure):
+    job_id = sheet_row['Job ID']
+    topic_description = sheet_row['Topic-Description']
+
+    if not (job_id and topic_description and template_structure):
+        return None, None
+
+    prompt = f"Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
+    prompt += "Follow the template structure strictly. Each section should be generated in the exact order and divided into subsections as follows:\n\n"
+
+    for section_name, max_chars in template_structure.items():
+        prompt += f"{section_name}: Limit to {max_chars} characters.\n"
+
+    return prompt, job_id
+
 def split_content_by_character_limits(content, section_limits):
     words = content.split()
     sections = {}
