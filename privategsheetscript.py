@@ -165,19 +165,20 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
         if job_id_in_sheet == job_id_normalized:
             row_index = i + 1
 
-            # Map generated content to appropriate columns based on template
+            # Ensure the generated_content is structured properly for updating
             for section_name, _ in template_structure:
-                if section_name in generated_content:
+                content = generated_content.get(section_name, "").strip()
+                if content:
                     col_letter = column_mappings.get(section_name)
-                    content = generated_content[section_name]
-
                     if col_letter:
                         st.write(f"Updating cell {col_letter}{row_index} with content: {content}")
-                        sheet.update_acell(f'{col_letter}{row_index}', content)
+                        try:
+                            sheet.update_acell(f'{col_letter}{row_index}', content)
+                        except Exception as e:
+                            st.error(f"Failed to update cell {col_letter}{row_index}: {e}")
                         time.sleep(1)  # To avoid rate-limiting
-
             break
-
+            
 # Main function
 def main():
     st.title("AI Script Generator with Google Sheets Transfer")
