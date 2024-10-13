@@ -10,6 +10,45 @@ import time
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
+# Custom CSS for styling
+st.markdown(
+    """
+    <style>
+    .st-emotion-cache-12fmjuu.ezrtsby2 {
+        display: none;
+    }
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .logo-container img {
+        width: 600px;
+    }
+    .app-container {
+        border-left: 5px solid #58258b;
+        border-right: 5px solid #58258b;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
+        color: #42145f;
+    }
+    .stButton button {
+        background-color: #fec923;
+        color: #42145f;
+    }
+    .stButton button:hover {
+        background-color: #42145f;
+        color: #fec923;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Define columns to be updated in the Google Sheet
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
     "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
@@ -33,7 +72,6 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame(), None
 
-# Load examples from CSV
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -44,7 +82,7 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
-# Clean text content
+# Clean text to remove special characters and emojis
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -59,7 +97,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Extract template structure from examples CSV
+# Extract template structure from the CSV file
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -84,7 +122,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-# Build template prompt for generation
+# Build the prompt for generating content
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -95,7 +133,7 @@ def build_template_prompt(sheet_row, template_structure):
     prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given, ensuring that the content of the umbrella sections is divided **verbatim** into subsections.\n\n"
     
     prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "For each section, generate content **in strict order**. Subsections must split the umbrella section **verbatim** into distinct, meaningful parts. **Do not reorder sections or introduce new content**.\n\n"
+    prompt += "For each section, generate content **in strict order**. Subsections must split the umbrella section **verbatim** into distinct, meaningful parts. **Do not reorder sections or introduce new content**:\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
@@ -115,12 +153,12 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Generate content with retries
+# Generate content with retries in case of failure
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
             message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
+                model="claude-3-5-sonnet-20240620",  # Use the Claude model
                 max_tokens=1000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -132,7 +170,7 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            return content_clean
+            return f"Job ID {job_id}:\n\n{content_clean}"
         
         except anthropic.APIError as e:
             if e.error.get('type') == 'overloaded_error' and i < retries - 1:
@@ -142,62 +180,19 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
-# Test Google Sheets write access
-def test_google_sheet_write(sheet):
-    try:
-        sheet.update_acell('H2', 'Test content from Streamlit')  # Replace 'H2' with any cell
-        st.success("Successfully wrote to the Google Sheet!")
-    except Exception as e:
-        st.error(f"Failed to write to the Google Sheet: {e}")
-
-# Map generated content to Google Sheet cells
-def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
-    job_id_normalized = job_id.strip().lower()
-    rows = sheet.get_all_values()
-
-    # Define column mappings for each section
-    column_mappings = {
-        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
-        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
-        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
-        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
-        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
-        "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
-    }
-
-    st.write(f"Processing Job ID: {job_id}")
-
-    # Iterate over all rows to find the matching Job ID
-    for i, row in enumerate(rows):
-        job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
-        if job_id_in_sheet == job_id_normalized:
-            row_index = i + 1
-
-            # Ensure the generated_content is structured properly for updating
-            for section_name, _ in template_structure:
-                content = generated_content.get(section_name, "").strip()
-                if content:
-                    col_letter = column_mappings.get(section_name)
-                    if col_letter:
-                        st.write(f"Updating cell {col_letter}{row_index} with content: {content}")
-                        try:
-                            sheet.update_acell(f'{col_letter}{row_index}', content)
-                            st.write(f"Successfully updated {col_letter}{row_index} with content: {content}")
-                        except Exception as e:
-                            st.error(f"Failed to update cell {col_letter}{row_index}: {e}")
-                        time.sleep(1)  # To avoid rate-limiting
-            break
-
 # Main function
 def main():
-    st.title("AI Script Generator with Google Sheets Transfer")
+    st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
-    request_sheet_id = '1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8'
+    # Load data only if not already stored in session_state
+    if 'sheet_data' not in st.session_state:
+        st.session_state['sheet_data'], _ = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+    if 'examples_data' not in st.session_state:
+        st.session_state['examples_data'] = load_examples()
 
-    sheet_data, sheet = load_google_sheet(request_sheet_id)
-    examples_data = load_examples()
+    sheet_data = st.session_state['sheet_data']
+    examples_data = st.session_state['examples_data']
 
     if sheet_data.empty or examples_data.empty:
         st.error("No data available from Google Sheets or Templates CSV.")
@@ -205,30 +200,38 @@ def main():
 
     st.dataframe(sheet_data)
 
-    # Test Google Sheet writing
-    test_google_sheet_write(sheet)
+    # Ensure session state management for content generation
+    if 'generated_contents' not in st.session_state:
+        st.session_state['generated_contents'] = []
 
-    if st.button("Generate and Transfer Content"):
+    if st.button("Generate Content"):
+        generated_contents = []
         for idx, row in sheet_data.iterrows():
             if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
-
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
-                st.warning(f"No template structure found for {row['Selected-Template']}.")
                 continue
-
             prompt, job_id = build_template_prompt(row, template_structure)
-            if not prompt:
-                st.warning(f"Failed to build prompt for Job ID {row['Job ID']}.")
+
+            if not prompt or not job_id:
                 continue
 
-            generated_content = generate_content_with_retry(prompt, row['Job ID'])
+            generated_content = generate_content_with_retry(prompt, job_id)
             if generated_content:
-                st.text_area(f"Generated Content for Job ID {job_id}", generated_content)
-                st.write("Generated content structure:", generated_content)  # Add this for debugging
-                map_generated_content_to_cells(sheet, row['Job ID'], generated_content, template_structure)
+                generated_contents.append(generated_content)
+
+        st.session_state['generated_contents'] = generated_contents
+        full_content = "\n\n".join(generated_contents)
+        st.text_area("Generated Content", full_content, height=300)
+
+        st.download_button(
+            label="Download Generated Content",
+            data=full_content,
+            file_name="generated_content.txt",
+            mime="text/plain"
+        )
 
 if __name__ == "__main__":
     main()
