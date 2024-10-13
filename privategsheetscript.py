@@ -4,12 +4,13 @@ import re
 import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
-import time
 import string
 
+# Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
+# Column structure for mapping
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
     "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
@@ -19,6 +20,7 @@ possible_columns = [
     "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
 ]
 
+# Load Google Sheets
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -32,6 +34,7 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame(), None
 
+# Load examples from CSV
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -42,6 +45,7 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
+# Clean the text content
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -56,6 +60,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
+# Extract template structure
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -80,6 +85,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+# Generate prompt for Claude model
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -110,6 +116,7 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
+# Generate content using retries
 def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -136,25 +143,22 @@ def generate_content_with_retry(prompt, job_id, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
+# Get Google Sheets column letter based on index
 def get_column_letter(column_name):
     column_index = possible_columns.index(column_name)
     return string.ascii_uppercase[7 + column_index]
 
+# Map generated content to Google Sheets
 def map_generated_content_to_cells(sheet, job_id, generated_content, template_structure):
     rows = sheet.get_all_values()
 
-    st.write(f"Sheet Rows: {rows}")
-    
     matched_row = None
     for i, row in enumerate(rows):
-        st.write(f"Checking row {i} with Job ID: {row[2]}")
         if row[2].strip().lower() == job_id.strip().lower():
             matched_row = i + 1
             break
     
-    if matched_row:
-        st.write(f"Matched Job ID at row: {matched_row}")
-    else:
+    if matched_row is None:
         st.error(f"Job ID {job_id} not found in Google Sheet!")
         return
 
@@ -171,15 +175,13 @@ def map_generated_content_to_cells(sheet, job_id, generated_content, template_st
         col_letter = get_column_letter(section_name)
         cell = f"{col_letter}{matched_row}"
         
-        st.write(f"Updating cell {cell} with content: {section_content}")
-        
         try:
             sheet.update_acell(cell, section_content)
             st.success(f"Successfully updated cell {cell} with content: {section_content}")
         except Exception as e:
             st.error(f"Failed to update cell {cell}: {e}")
-            break
 
+# Main app function
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
@@ -208,11 +210,12 @@ def main():
             if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
+
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
                 continue
-            prompt, job_id = build_template_prompt(row, template_structure)
 
+            prompt, job_id = build_template_prompt(row, template_structure)
             if not prompt or not job_id:
                 continue
 
