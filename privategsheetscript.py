@@ -93,10 +93,10 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Function to split the generated content according to character limits
-def split_content_by_character_limits(content, section_limits):
+# Function to split the generated content into sections and subsections
+def split_content_into_subsections(content, section_limits):
     words = content.split()
-    sections = {}
+    subsections = {}
     word_idx = 0
 
     for section, max_chars in section_limits.items():
@@ -108,9 +108,9 @@ def split_content_by_character_limits(content, section_limits):
             char_count += len(words[word_idx]) + 1
             word_idx += 1
 
-        sections[section] = " ".join(section_content).strip()
+        subsections[section] = " ".join(section_content).strip()
 
-    return sections
+    return subsections
 
 # Generate content and split it based on the template structure
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
@@ -129,7 +129,7 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            structured_content = split_content_by_character_limits(content_clean, section_limits)
+            structured_content = split_content_into_subsections(content_clean, section_limits)
 
             return structured_content
         
