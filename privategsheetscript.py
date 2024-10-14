@@ -10,6 +10,13 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
+# Function to clean job IDs
+def clean_job_id(job_id):
+    """Clean the job ID by stripping spaces and converting to lowercase."""
+    if not job_id:
+        return None
+    return job_id.strip().lower()
+
 possible_columns = [
     "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
     "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
