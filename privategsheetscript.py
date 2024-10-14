@@ -6,11 +6,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 import anthropic
 
-# Initialize the Anthropic client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-# Clean text by removing unwanted characters
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
@@ -25,7 +23,6 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Load Google Sheets data
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -39,7 +36,6 @@ def load_google_sheet(sheet_id):
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame()
 
-# Load the examples CSV to extract the template structure
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -50,7 +46,6 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
-# Extract the template structure and max characters per section
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -84,21 +79,21 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-# Enforce character limit for content sections
 def enforce_character_limit(content, max_chars):
     if len(content) > max_chars:
         return content[:max_chars].rsplit(' ', 1)[0] + "..."
     return content
 
-# Split content into umbrella sections
-def split_content_into_umbrella(content):
+def split_content_into_umbrella(content, num_subsections):
     words = content.split()
-    midpoint = len(words) // 2
-    first_half = " ".join(words[:midpoint])
-    second_half = " ".join(words[midpoint:])
-    return first_half, second_half
+    section_length = len(words) // num_subsections
+    subsections = []
+    for i in range(num_subsections):
+        start = i * section_length
+        end = start + section_length if i < num_subsections - 1 else None
+        subsections.append(" ".join(words[start:end]))
+    return subsections
 
-# Build the content generation prompt
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -107,21 +102,20 @@ def build_template_prompt(sheet_row, template_structure):
         return None, None
 
     prompt = f"Generate content for Job ID {job_id} based on the description from the Google Sheet:\n\n{topic_description}\n\n"
-    prompt += "Follow the exact template structure below. Subsections should be distinct parts of the umbrella section. Do not introduce new content.\n\n"
+    prompt += "Follow the exact template structure below. Main sections should contain the full content, and subsections should be verbatim parts of the main section. Do not introduce new content in subsections.\n\n"
 
     umbrella_sections = {}
     for section_name, max_chars in template_structure:
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
-            prompt += f"Section {section_name}: Stay within {max_chars} characters.\n"
+            prompt += f"Section {section_name}: Provide full content within {max_chars} characters.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a distinct, verbatim part of '{umbrella_sections[umbrella_key]}' within {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Extract a verbatim part of '{umbrella_sections[umbrella_key]}' within {max_chars} characters.\n"
 
     return prompt, job_id
 
-# Generate content based on the prompt and enforce section limits
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -139,7 +133,6 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
             content_clean = clean_text(content)
 
-            # Split and enforce character limits based on template structure
             structured_content = {}
             content_sections = content_clean.split("\n\n")
 
@@ -148,11 +141,14 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
                     section_content = content_sections[i]
                     structured_content[section_name] = enforce_character_limit(section_content, max_chars)
 
-                    # Apply umbrella splitting for subsections (e.g., Text01-1, Text01-2)
-                    if '-' not in section_name and section_name in structured_content:
-                        first_part, second_part = split_content_into_umbrella(structured_content[section_name])
-                        structured_content[f"{section_name}-1"] = first_part
-                        structured_content[f"{section_name}-2"] = second_part
+                    if '-' not in section_name:
+                        umbrella_key = section_name.split()[0]
+                        subsections = [key for key in section_limits.keys() if key.startswith(umbrella_key + '-')]
+                        if subsections:
+                            main_content = structured_content[section_name].split(': ', 1)[-1]
+                            split_content = split_content_into_umbrella(main_content, len(subsections))
+                            for j, subsection in enumerate(subsections):
+                                structured_content[subsection] = enforce_character_limit(split_content[j], section_limits[subsection])
 
             return structured_content
         
@@ -162,7 +158,6 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
-# Map generated content to the appropriate Google Sheet columns
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
         "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
@@ -179,7 +174,11 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
             sheet.update_acell(f'{col_letter}{row_index}', content.strip())
             time.sleep(1)
 
-# Update the Google Sheet with generated content
+    for section, col_letter in mapping.items():
+        if section not in structured_content:
+            sheet.update_acell(f'{col_letter}{row_index}', '')
+            time.sleep(1)
+
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -213,7 +212,6 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return False
 
-# Main function
 def main():
     st.title("AI Script Generator with Template Enforced Content")
     st.markdown("---")
