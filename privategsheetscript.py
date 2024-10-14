@@ -111,7 +111,7 @@ def extract_template_structure(selected_template, examples_data):
         template_number_str = "01"
 
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
-    
+
     if example_row.empty:
         return None
 
@@ -230,6 +230,8 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     time.sleep(delay)
                 else:
                     st.error(f"Error generating {channel} content: {e}")
+        else:
+            generated_content[channel] = ""
     return generated_content
 
 def update_google_sheet(sheet_id, job_id, generated_content):
@@ -257,17 +259,10 @@ def update_google_sheet(sheet_id, job_id, generated_content):
             "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
         }
         
-        updates = []
         for section, content in generated_content.items():
             if section in section_to_column:
-                col = gspread.utils.a1_to_rowcol(section_to_column[section] + '1')[1]
-                updates.append({
-                    'range': sheet.cell(row, col),
-                    'values': [[content]]
-                })
-        
-        if updates:
-            sheet.batch_update(updates)
+                cell_range = f'{section_to_column[section]}{row}'
+                sheet.update(cell_range, content)
         
         st.success(f"Updated Google Sheet for Job ID {job_id}")
     except Exception as e:
@@ -319,7 +314,7 @@ def main():
         for job_id, content in generated_contents:
             st.subheader(f"Generated Content for Job ID: {job_id}")
             for section, text in content.items():
-                st.text_area(f"Section {section}", text, height=100)
+                st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
             st.markdown("---")
 
     st.markdown("---")
