@@ -129,33 +129,32 @@ def extract_template_structure(selected_template, examples_data):
         if col != 'Template':
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
-                template_structure.append((col, text_element))
+                max_chars = len(str(text_element))
+                template_structure.append((col, max_chars))
     return template_structure
 
 def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    # Only include main sections in the prompt
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. The content should be concise and within the specified character limits. Do not include character limit information in your output.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. Ensure that the content for each section does not exceed the specified character limit. Do not include any mention of character counts or limits in your output.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
-    for section_name, content in template_structure:
+    for section_name, max_chars in template_structure:
         if '-' not in section_name:
-            # This is a main section
-            prompt += f"Section {section_name}:\n"
+            prompt += f"Section {section_name}: (max {max_chars} characters)\n"
 
     prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections. Do not include any additional text or explanations.\n" + anthropic.AI_PROMPT
 
     return prompt
 
-def generate_content_with_retry(prompt, retries=3, delay=5):
+def generate_content_with_retry(prompt, section_character_limits, retries=3, delay=5):
     for i in range(retries):
         try:
             response = client.completions.create(
                 prompt=prompt,
                 model="claude-2",
-                max_tokens_to_sample=1000,
+                max_tokens_to_sample=2000,
                 temperature=0.7,
             )
 
@@ -180,8 +179,11 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
                 elif current_section:
                     sections[current_section] += ' ' + line.strip()
 
+            # Trim content to character limits
             for section in sections:
-                sections[section] = sections[section].strip()
+                limit = section_character_limits.get(section, None)
+                if limit:
+                    sections[section] = sections[section][:limit].strip()
 
             return sections
 
@@ -193,19 +195,28 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
-def divide_content_verbatim(main_content, subsections):
+def divide_content_verbatim(main_content, subsections, section_character_limits):
     words = main_content.split()
+    total_chars = len(main_content)
     num_subsections = len(subsections)
-    total_words = len(words)
-    words_per_subsection = total_words // num_subsections
-    remainder = total_words % num_subsections
     subsections_content = {}
-    start = 0
-    for i, subsection in enumerate(subsections):
-        end = start + words_per_subsection + (1 if i < remainder else 0)
-        subsection_content = ' '.join(words[start:end])
-        subsections_content[subsection] = subsection_content
-        start = end
+    start_idx = 0
+    for subsection in subsections:
+        limit = section_character_limits.get(subsection, None)
+        if limit is None:
+            continue
+
+        # Determine the end index based on character limit
+        end_idx = start_idx
+        current_chars = 0
+        while end_idx < len(words) and current_chars + len(words[end_idx]) + (1 if current_chars > 0 else 0) <= limit:
+            current_chars += len(words[end_idx]) + (1 if current_chars > 0 else 0)
+            end_idx +=1
+
+        subsection_content = ' '.join(words[start_idx:end_idx])
+        subsections_content[subsection] = subsection_content.strip()
+        start_idx = end_idx
+
     return subsections_content
 
 def update_google_sheet(sheet_id, job_id, generated_content):
@@ -258,6 +269,33 @@ def get_column_name(df, name):
     else:
         return None
 
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    generated_content = {}
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
+                response = client.completions.create(
+                    prompt=prompt,
+                    model="claude-2",
+                    max_tokens_to_sample=500,
+                    temperature=0.7,
+                )
+
+                content = response.completion if response.completion else "No content generated."
+                generated_content[channel] = content.strip()
+                break
+
+            except anthropic.ApiException as e:
+                if 'overloaded' in str(e).lower() and i < retries - 1:
+                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                    time.sleep(delay)
+                else:
+                    st.error(f"Error generating {channel} content: {e}")
+        else:
+            generated_content[channel] = ""
+    return generated_content
+
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
@@ -302,22 +340,27 @@ def main():
             if template_structure is None:
                 st.warning(f"Template {selected_template} not found in examples data.")
                 continue
+
+            # Build a mapping of section names to character limits
+            section_character_limits = {name: max_chars for name, max_chars in template_structure}
+
             prompt = build_template_prompt(topic_description, template_structure)
 
             if not prompt:
                 continue
 
-            generated_content = generate_content_with_retry(prompt)
+            generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
                 # Now, divide main sections' content among subsections
                 full_content = generated_content.copy()
                 for main_section in full_content:
                     # Find subsections
                     subsections = [s for s, _ in template_structure if s.startswith(f"{main_section}-")]
-                    num_subsections = len(subsections)
-                    if num_subsections > 0:
+                    if subsections:
                         main_content = generated_content[main_section]
-                        divided_contents = divide_content_verbatim(main_content, subsections)
+                        # Build subsection character limits
+                        subsection_character_limits = {s: section_character_limits[s] for s in subsections}
+                        divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
                         # Add subsections to generated_content
                         generated_content.update(divided_contents)
 
@@ -384,33 +427,6 @@ def main():
                 )
 
     st.markdown('</div>', unsafe_allow_html=True)
-
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
-                response = client.completions.create(
-                    prompt=prompt,
-                    model="claude-2",
-                    max_tokens_to_sample=500,
-                    temperature=0.7,
-                )
-
-                content = response.completion if response.completion else "No content generated."
-                generated_content[channel] = content
-                break
-
-            except anthropic.ApiException as e:
-                if 'overloaded' in str(e).lower() and i < retries - 1:
-                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                    time.sleep(delay)
-                else:
-                    st.error(f"Error generating {channel} content: {e}")
-        else:
-            generated_content[channel] = ""
-    return generated_content
 
 if __name__ == "__main__":
     main()
