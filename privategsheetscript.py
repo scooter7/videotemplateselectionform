@@ -136,12 +136,25 @@ def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. Use the description to generate content for each section, and stay within the specified character limits.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. For umbrella sections (e.g., Text01), generate a main idea. For subsections (e.g., Text01-1), generate content that expands on the umbrella section. Use the description to generate content, and stay within the specified character limits.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
+    umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-        prompt += f"Section {section_name}: Content (max {max_chars} characters)\n"
+        if '-' not in section_name:
+            # This is an umbrella section
+            prompt += f"Section {section_name}: Generate a main idea based on the description. Max {max_chars} characters.\n"
+            umbrella_sections[section_name] = []
+        else:
+            # This is a subsection
+            main_section = section_name.split('-')[0]
+            if main_section in umbrella_sections:
+                prompt += f"Section {section_name}: Generate a subsection of '{main_section}' that focuses on a specific aspect. Max {max_chars} characters.\n"
+                umbrella_sections[main_section].append(section_name)
+            else:
+                # Handle cases where the main section might be missing
+                prompt += f"Section {section_name}: Generate content. Max {max_chars} characters.\n"
 
     prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'.\n" + anthropic.AI_PROMPT
 
@@ -165,13 +178,17 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
             current_section = None
             for line in content_clean.split('\n'):
                 if line.strip().startswith("Section "):
-                    current_section = line.split(":")[0].replace("Section ", "").strip()
-                    sections[current_section] = ""
-                    if ":" in line:
-                        line_content = line.split(":", 1)[1].strip()
-                        sections[current_section] += line_content + "\n"
+                    section_header = line.strip().split(":", 1)
+                    if len(section_header) == 2:
+                        section_name = section_header[0].replace("Section ", "").strip()
+                        section_content = section_header[1].strip()
+                    else:
+                        section_name = line.strip().replace("Section ", "").strip()
+                        section_content = ""
+                    current_section = section_name
+                    sections[current_section] = section_content
                 elif current_section:
-                    sections[current_section] += line + "\n"
+                    sections[current_section] += '\n' + line.strip()
 
             for section in sections:
                 sections[section] = sections[section].strip()
