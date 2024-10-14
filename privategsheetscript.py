@@ -136,34 +136,16 @@ def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Follow the umbrella methodology: for each main section (e.g., Text01), provide a concise main idea. For each corresponding subsection (e.g., Text01-1), provide a verbatim repetition or slight rephrasing of the main section to expand upon it. Ensure that subsections directly relate to their main sections.\n\n"
+    # Only include main sections in the prompt
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. The content should be concise and within the specified character limits.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
-    # Provide examples in the prompt
-    prompt += "Example of expected output format:\n"
-    prompt += "Section Text01: PartsSource Moves\n"
-    prompt += "Section Text01-1: PartsSource Moves\n"
-    prompt += "Section Text02: Relocating HQ to Hudson, Ohio: 70,000 sq ft\n"
-    prompt += "Section Text02-1: Relocating HQ to Hudson, Ohio\n\n"
-
-    umbrella_sections = {}
     for section_name, content in template_structure:
-        max_chars = len(content)
         if '-' not in section_name:
-            # This is an umbrella section
-            prompt += f"Section {section_name}: [Main idea] (max {max_chars} characters)\n"
-            umbrella_sections[section_name] = []
-        else:
-            # This is a subsection
-            main_section = section_name.split('-')[0]
-            if main_section in umbrella_sections:
-                prompt += f"Section {section_name}: [Verbatim repetition or slight rephrasing of {main_section}] (max {max_chars} characters)\n"
-                umbrella_sections[main_section].append(section_name)
-            else:
-                # Handle cases where the main section might be missing
-                prompt += f"Section {section_name}: [Content related to {main_section}] (max {max_chars} characters)\n"
+            max_chars = len(content)
+            prompt += f"Section {section_name}: [Content] (max {max_chars} characters)\n"
 
-    prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'. Remember to follow the umbrella methodology as in the examples provided.\n" + anthropic.AI_PROMPT
+    prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections.\n" + anthropic.AI_PROMPT
 
     return prompt
 
@@ -210,32 +192,22 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
-                response = client.completions.create(
-                    prompt=prompt,
-                    model="claude-2",
-                    max_tokens_to_sample=500,
-                    temperature=0.7,
-                )
-
-                content = response.completion if response.completion else "No content generated."
-                generated_content[channel] = content
-                break
-
-            except anthropic.ApiException as e:
-                if 'overloaded' in str(e).lower() and i < retries - 1:
-                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                    time.sleep(delay)
-                else:
-                    st.error(f"Error generating {channel} content: {e}")
-        else:
-            generated_content[channel] = ""
-    return generated_content
+def divide_content_among_subsections(main_content, num_subsections):
+    words = main_content.split()
+    total_words = len(words)
+    words_per_subsection = total_words // num_subsections
+    subsections = {}
+    start = 0
+    for i in range(num_subsections):
+        end = start + words_per_subsection
+        if i == num_subsections - 1:
+            # Include any remaining words in the last subsection
+            end = total_words
+        subsection_content = ' '.join(words[start:end])
+        subsection_name = f"{main_section}-{i+1}"
+        subsections[subsection_name] = subsection_content
+        start = end
+    return subsections
 
 def update_google_sheet(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
@@ -338,6 +310,18 @@ def main():
 
             generated_content = generate_content_with_retry(prompt)
             if generated_content:
+                # Now, divide main sections' content among subsections
+                full_content = generated_content.copy()
+                for main_section in full_content:
+                    # Find subsections
+                    subsections = [s for s, _ in template_structure if s.startswith(f"{main_section}-")]
+                    num_subsections = len(subsections)
+                    if num_subsections > 0:
+                        main_content = generated_content[main_section]
+                        divided_contents = divide_content_verbatim(main_content, subsections)
+                        # Add subsections to generated_content
+                        generated_content.update(divided_contents)
+
                 generated_contents.append((job_id, generated_content))
 
                 # Update the response sheet with generated content
@@ -401,6 +385,21 @@ def main():
                 )
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+def divide_content_verbatim(main_content, subsections):
+    words = main_content.split()
+    num_subsections = len(subsections)
+    total_words = len(words)
+    words_per_subsection = total_words // num_subsections
+    remainder = total_words % num_subsections
+    subsections_content = {}
+    start = 0
+    for i, subsection in enumerate(subsections):
+        end = start + words_per_subsection + (1 if i < remainder else 0)
+        subsection_content = ' '.join(words[start:end])
+        subsections_content[subsection] = subsection_content
+        start = end
+    return subsections_content
 
 if __name__ == "__main__":
     main()
