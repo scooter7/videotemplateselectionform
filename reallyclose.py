@@ -130,19 +130,19 @@ def extract_template_structure(selected_template, examples_data):
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
                 max_chars = len(str(text_element))
-                template_structure.append((col, max_chars))
+                template_structure.append((col, text_element, max_chars))
     return template_structure
 
 def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. Ensure that the content for each section conveys complete ideas, even if you need to slightly exceed the character limit. Do not include any mention of character counts or limits in your output.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. Ensure that the content for each section does not exceed the specified character limit. Do not include any mention of character counts or limits in your output.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
-    for section_name, max_chars in template_structure:
+    for section_name, _, max_chars in template_structure:
         if '-' not in section_name:
-            prompt += f"Section {section_name}:\n"
+            prompt += f"Section {section_name}: (max {max_chars} characters)\n"
 
     prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections. Do not include any additional text or explanations.\n" + anthropic.AI_PROMPT
 
@@ -185,22 +185,14 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 if limit:
                     content = sections[section]
                     if len(content) > limit:
-                        # Find the last space before the limit
-                        last_space = content.rfind(' ', 0, limit)
-                        if last_space == -1:
-                            # No space found, include the whole word even if it exceeds the limit
-                            sections[section] = content[:limit]
-                        else:
-                            # Include words up to the last space
-                            sections[section] = content[:last_space]
-                    # Ensure complete ideas are conveyed
-                    # Optionally, extend slightly beyond the limit to complete the sentence
-                    if not content.endswith(('.', '!', '?')):
-                        # Find the next punctuation mark
-                        next_punct = re.search(r'[.!?]', content)
-                        if next_punct:
-                            end_idx = next_punct.end()
-                            sections[section] = content[:end_idx]
+                        # Trim without cutting off mid-word
+                        trimmed_content = content[:limit].rsplit(' ', 1)[0]
+                        if not trimmed_content:
+                            # If trimming removes all content, keep the original up to limit
+                            trimmed_content = content[:limit]
+                        sections[section] = trimmed_content.strip()
+                else:
+                    sections[section] = sections[section].strip()
 
             return sections
 
@@ -214,33 +206,35 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
 
 def divide_content_verbatim(main_content, subsections, section_character_limits):
     words = main_content.split()
+    total_words = len(words)
     num_subsections = len(subsections)
     subsections_content = {}
     start_idx = 0
+
     for subsection in subsections:
         limit = section_character_limits.get(subsection, None)
         if limit is None:
             continue
 
         current_content = ''
-        while start_idx < len(words):
+        while start_idx < total_words:
             word = words[start_idx]
-            if len(current_content) + len(word) + 1 > limit:
+            if len(current_content) + len(word) + (1 if current_content else 0) > limit:
                 break
             if current_content:
                 current_content += ' '
             current_content += word
             start_idx += 1
 
-        # If word exceeds the limit but we have no content yet, include it anyway
-        if not current_content and start_idx < len(words):
+        # If no words could be added due to limit, add at least one word
+        if not current_content and start_idx < total_words:
             current_content = words[start_idx]
             start_idx += 1
 
-        subsections_content[subsection] = current_content
+        subsections_content[subsection] = current_content.strip()
 
     # If there are remaining words, add them to the last subsection
-    if start_idx < len(words):
+    if start_idx < total_words and subsections:
         last_subsection = subsections[-1]
         remaining_content = ' '.join(words[start_idx:])
         subsections_content[last_subsection] += ' ' + remaining_content
@@ -370,7 +364,7 @@ def main():
                 continue
 
             # Build a mapping of section names to character limits
-            section_character_limits = {name: max_chars for name, max_chars in template_structure}
+            section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
 
             prompt = build_template_prompt(topic_description, template_structure)
 
@@ -383,7 +377,7 @@ def main():
                 full_content = generated_content.copy()
                 for main_section in full_content:
                     # Find subsections
-                    subsections = [s for s, _ in template_structure if s.startswith(f"{main_section}-")]
+                    subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
                     if subsections:
                         main_content = generated_content[main_section]
                         # Build subsection character limits
@@ -393,7 +387,7 @@ def main():
                         generated_content.update(divided_contents)
 
                 # Include any sections that were not main sections or subsections (e.g., CTA)
-                for section_name, max_chars in template_structure:
+                for section_name, _, max_chars in template_structure:
                     if section_name not in generated_content:
                         if 'CTA' in section_name:
                             # Generate CTA content
