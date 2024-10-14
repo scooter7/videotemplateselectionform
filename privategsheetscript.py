@@ -10,34 +10,14 @@ import anthropic
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-def clean_job_id(job_id):
-    if not job_id:
-        return None
-    return job_id.strip().lower()
-
-@st.cache_data
-def load_google_sheet(sheet_id):
-    credentials_info = st.secrets["google_credentials"]
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    gc = gspread.authorize(credentials)
-    try:
-        sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())
-        return data
-    except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return pd.DataFrame()
-
-@st.cache_data
-def load_template_csv():
-    url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
-    try:
-        examples = pd.read_csv(url)
-        return examples
-    except Exception as e:
-        st.error(f"Error loading examples CSV: {e}")
-        return pd.DataFrame()
+possible_columns = [
+    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
+    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
+    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
+    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
+    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
+    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
+]
 
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
@@ -53,7 +33,18 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Function to extract the template structure and max characters per section
+# Ensure we pull the exact structure from examples.csv
+@st.cache_data
+def load_examples():
+    url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
+    try:
+        examples = pd.read_csv(url)
+        return examples
+    except Exception as e:
+        st.error(f"Error loading examples CSV: {e}")
+        return pd.DataFrame()
+
+# Extract the template structure and max characters per section from the examples CSV
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -69,16 +60,27 @@ def extract_template_structure(selected_template, examples_data):
     if example_row.empty:
         return None
 
-    # Return a dictionary with column names and their character limits
-    template_structure = {}
-    for col in example_row.columns:
-        text_element = example_row[col].values[0]
-        if pd.notna(text_element):
-            template_structure[col] = len(text_element)
+    # Return a list of column names and example texts
+    template_structure = []
+    for col in possible_columns:
+        if col in example_row.columns:
+            text_element = example_row[col].values[0]
+            if pd.notna(text_element):
+                template_structure.append((col, text_element))
 
     return template_structure
 
-# Build the content generation prompt using job details
+# Enforce character limit to fit within a certain section limit
+def enforce_character_limit(content, max_chars):
+    relaxed_limit = max_chars + 20  # Relax the limit by 20 characters for flexibility
+    if len(content) > relaxed_limit:
+        truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
+        if not truncated_content:
+            return content[:max_chars].rstrip() + "..."
+        return truncated_content + "..."
+    return content
+
+# Build the content generation prompt based on the job details and template structure
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -86,29 +88,25 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} based on the theme:\n\n{topic_description}\n\n"
-    prompt += "Follow the template structure strictly. Each section should be generated in the exact order and divided into subsections as follows:\n\n"
+    # Construct the prompt based on job description and template structure
+    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet:\n\n"
+    prompt += f"Description:\n{topic_description}\n\n"
+    prompt += "Follow the exact template and section structure below, dividing umbrella sections verbatim into distinct subsections. Do not introduce any new or irrelevant content. Stay within character limits.\n\n"
 
-    for section_name, max_chars in template_structure.items():
-        prompt += f"{section_name}: Limit to {max_chars} characters.\n"
+    umbrella_sections = {}
+    for section_name, content in template_structure:
+        max_chars = len(content)
+        if '-' not in section_name:
+            umbrella_sections[section_name] = section_name
+            prompt += f"{section_name}: Stay within {max_chars} characters. Generate text strictly based on the Google Sheet description.\n"
+        else:
+            umbrella_key = section_name.split('-')[0]
+            if umbrella_key in umbrella_sections:
+                prompt += f"{section_name}: Extract a distinct, verbatim part of '{umbrella_sections[umbrella_key]}' within {max_chars} characters.\n"
 
     return prompt, job_id
 
-# Function to split content based on character limits and create subsections for umbrella structure
-def split_content_into_umbrella(content, section_name):
-    words = content.split()
-    midpoint = len(words) // 2
-
-    if len(words) > 1:
-        first_half = " ".join(words[:midpoint])
-        second_half = " ".join(words[midpoint:])
-    else:
-        first_half = content
-        second_half = ""
-
-    return first_half, second_half
-
-# Function to generate and split content based on template structure
+# Function to generate the content using Anthropic and enforce the structure
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -126,17 +124,17 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
             content_clean = clean_text(content)
             
-            # Split the content based on umbrella structure
+            # Split and enforce character limits based on template structure
             structured_content = {}
             for section_name, max_chars in section_limits.items():
-                # Get the content for this section
-                content_section = content_clean[:max_chars].strip()  # Limit content to the max characters
-                first_half, second_half = split_content_into_umbrella(content_section, section_name)
+                section_content = enforce_character_limit(content_clean, max_chars)
+                structured_content[section_name] = section_content
 
-                # Map main section and subsections
-                structured_content[section_name] = content_section
-                structured_content[f"{section_name}-1"] = first_half
-                structured_content[f"{section_name}-2"] = second_half
+                # Apply umbrella structure to subsections
+                if '-' in section_name:
+                    first_part, second_part = split_content_into_umbrella(section_content)
+                    structured_content[f"{section_name}-1"] = first_part
+                    structured_content[f"{section_name}-2"] = second_part
 
             return structured_content
         
@@ -146,7 +144,15 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
-# Map structured content to Google Sheet cells based on the umbrella model
+# Split content into two halves (umbrella structure)
+def split_content_into_umbrella(content):
+    words = content.split()
+    midpoint = len(words) // 2
+    first_half = " ".join(words[:midpoint])
+    second_half = " ".join(words[midpoint:])
+    return first_half, second_half
+
+# Map generated content to the appropriate Google Sheet columns
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
         "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
@@ -163,6 +169,7 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
             sheet.update_acell(f'{col_letter}{row_index}', content)
             time.sleep(1)
 
+# Update the Google Sheet with generated content
 def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -195,24 +202,17 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return False
-    except gspread.exceptions.APIError as e:
-        if retries > 0 and e.response.status_code == 500:
-            st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
-            time.sleep(5)
-            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, retries-1)
-        else:
-            st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
-            return False
 
+# Main function
 def main():
-    st.title("AI Script and Social Media Content Generator")
+    st.title("AI Script Generator with Template Enforced Content")
     st.markdown("---")
 
     sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
     request_sheet_id = '1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8'
 
     sheet_data = load_google_sheet(request_sheet_id)
-    examples_data = load_template_csv()
+    examples_data = load_examples()
 
     if sheet_data.empty or examples_data.empty:
         st.error("No data available from the request Google Sheet or the examples CSV.")
@@ -243,7 +243,7 @@ def main():
                 st.warning(f"Could not build prompt for Job ID {job_id}. Skipping this row.")
                 continue
 
-            generated_content = generate_and_split_content(prompt, job_id, template_structure)
+            generated_content = generate_and_split_content(prompt, job_id, dict(template_structure))
 
             if generated_content:
                 update_google_sheet_with_generated_content(sheet_id, job_id, generated_content)
