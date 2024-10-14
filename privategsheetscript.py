@@ -112,24 +112,24 @@ def build_template_prompt(sheet_row, template_structure):
         return None, None
 
     # Construct the prompt based on job description and template structure
-    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet:\n\n"
+    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
-    prompt += "Follow the exact template and section structure below, dividing umbrella sections verbatim into distinct subsections. Do not introduce any new or irrelevant content. Stay within character limits.\n\n"
+    prompt += "Follow the exact structure below, dividing umbrella sections into distinct subsections. Do not include section labels like 'Text01'. Do not introduce any new or irrelevant content. Stay within character limits.\n\n"
 
     umbrella_sections = {}
-    for section_name, content in template_structure:
-        max_chars = content  # This is already an integer, no need for len()
+    for section_name, max_chars in template_structure:
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
-            prompt += f"{section_name}: Stay within {max_chars} characters. Generate text strictly based on the Google Sheet description.\n"
+            prompt += f"Section {section_name}: Generate content strictly based on the Google Sheet description. Stay within {max_chars} characters.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"{section_name}: Extract a distinct, verbatim part of '{umbrella_sections[umbrella_key]}' within {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Extract a distinct, verbatim part of '{umbrella_sections[umbrella_key]}' within {max_chars} characters.\n"
 
     return prompt, job_id
 
 # Generate content based on the prompt and enforce section limits
+# Split and enforce character limits based on template structure
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -146,18 +146,24 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            
+
             # Split and enforce character limits based on template structure
             structured_content = {}
-            for section_name, max_chars in section_limits.items():
-                section_content = enforce_character_limit(content_clean, max_chars)
-                structured_content[section_name] = section_content
+            content_sections = content_clean.split("\n\n")  # Assuming sections are separated by double newlines
 
-                # Apply umbrella structure to subsections
-                if '-' in section_name:
-                    first_part, second_part = split_content_into_umbrella(section_content)
-                    structured_content[f"{section_name}-1"] = first_part
-                    structured_content[f"{section_name}-2"] = second_part
+            # Split the content into sections and enforce limits
+            for i, (section_name, max_chars) in enumerate(section_limits.items()):
+                if i < len(content_sections):
+                    section_content = content_sections[i]
+                    structured_content[section_name] = enforce_character_limit(section_content, max_chars)
+
+                    # Apply umbrella splitting for subsections (e.g., Text01-1, Text01-2)
+                    if '-' in section_name:
+                        first_part, second_part = split_content_into_umbrella(section_content)
+                        structured_content[f"{section_name}-1"] = enforce_character_limit(first_part, max_chars // 2)
+                        structured_content[f"{section_name}-2"] = enforce_character_limit(second_part, max_chars // 2)
+                else:
+                    structured_content[section_name] = ""  # Empty if no more content
 
             return structured_content
         
@@ -189,7 +195,8 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
     for section, content in structured_content.items():
         if section in mapping:
             col_letter = mapping[section]
-            sheet.update_acell(f'{col_letter}{row_index}', content)
+            # Update Google Sheet with content only, without labels
+            sheet.update_acell(f'{col_letter}{row_index}', content.strip())
             time.sleep(1)
 
 # Update the Google Sheet with generated content
