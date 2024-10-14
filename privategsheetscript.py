@@ -267,8 +267,9 @@ def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
+    # Load data from the request sheet (input data)
     if 'sheet_data' not in st.session_state:
-        st.session_state['sheet_data'] = load_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8')
+        st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     if 'examples_data' not in st.session_state:
         st.session_state['examples_data'] = load_examples()
 
@@ -315,6 +316,7 @@ def main():
             if generated_content:
                 generated_contents.append((job_id, generated_content))
 
+                # Update the response sheet with generated content
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
 
         st.session_state['generated_contents'] = generated_contents
