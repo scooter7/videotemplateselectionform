@@ -1,27 +1,67 @@
-import re
-import time
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
+import re
 import anthropic
+from google.oauth2.service_account import Credentials
+import gspread
+import time
 
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
 
-def clean_text(text):
-    text = re.sub(r'\*\*', '', text)
-    emoji_pattern = re.compile(
-        "[" 
-        u"\U0001F600-\U0001F64F"
-        u"\U0001F300-\U0001F5FF"
-        u"\U0001F680-\U0001F6FF"
-        u"\U0001F1E0-\U0001F1FF"
-        u"\U00002702-\U000027B0"
-        u"\U000024C2-\U0001F251"
-        "]+", flags=re.UNICODE
-    )
-    return emoji_pattern.sub(r'', text)
+st.markdown(
+    """
+    <style>
+    .st-emotion-cache-12fmjuu.ezrtsby2 {
+        display: none;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <style>
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .logo-container img {
+        width: 600px;
+    }
+    .app-container {
+        border-left: 5px solid #58258b;
+        border-right: 5px solid #58258b;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    .stTextArea, .stTextInput, .stMultiSelect, .stSlider {
+        color: #42145f;
+    }
+    .stButton button {
+        background-color: #fec923;
+        color: #42145f;
+    }
+    .stButton button:hover {
+        background-color: #42145f;
+        color: #fec923;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+possible_columns = [
+    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
+    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
+    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
+    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
+    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
+    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
+]
 
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
@@ -46,6 +86,20 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
+def clean_text(text):
+    text = re.sub(r'\*\*', '', text)
+    emoji_pattern = re.compile(
+        "[" 
+        u"\U0001F600-\U0001F64F"  
+        u"\U0001F300-\U0001F5FF"  
+        u"\U0001F680-\U0001F6FF"  
+        u"\U0001F1E0-\U0001F1FF"  
+        u"\U00002702-\U000027B0"
+        u"\U000024C2-\U0001F251"
+        "]+", flags=re.UNICODE
+    )
+    return emoji_pattern.sub(r'', text)
+
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -62,37 +116,22 @@ def extract_template_structure(selected_template, examples_data):
         return None
 
     template_structure = []
-    possible_columns = [
-        "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
-        "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
-        "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
-        "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
-        "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
-        "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
-    ]
-    
     for col in possible_columns:
         if col in example_row.columns:
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
-                template_structure.append((col, len(text_element)))
+                template_structure.append((col, text_element))
 
     return template_structure
 
 def enforce_character_limit(content, max_chars):
-    if len(content) > max_chars:
-        return content[:max_chars].rsplit(' ', 1)[0] + "..."
+    relaxed_limit = max_chars + 20
+    if len(content) > relaxed_limit:
+        truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
+        if not truncated_content:
+            return content[:max_chars].rstrip() + "..."
+        return truncated_content + "..."
     return content
-
-def split_content_into_umbrella(content, num_subsections):
-    words = content.split()
-    section_length = len(words) // num_subsections
-    subsections = []
-    for i in range(num_subsections):
-        start = i * section_length
-        end = start + section_length if i < num_subsections - 1 else None
-        subsections.append(" ".join(words[start:end]))
-    return subsections
 
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
@@ -101,22 +140,30 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} based on the description from the Google Sheet:\n\n{topic_description}\n\n"
-    prompt += "Follow the exact template structure below. Main sections should contain the full content, and subsections should be verbatim parts of the main section. Do not introduce new content in subsections.\n\n"
+    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given, ensuring that the content of the umbrella sections is divided **verbatim** into subsections.\n\n"
+    
+    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
+    prompt += "For each section, generate content **in strict order**. Subsections must split the umbrella section **verbatim** into distinct, meaningful parts. **Do not reorder sections or introduce new content**:\n\n"
 
     umbrella_sections = {}
-    for section_name, max_chars in template_structure:
+    for section_name, content in template_structure:
+        max_chars = len(content)
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
-            prompt += f"Section {section_name}: Provide full content within {max_chars} characters.\n"
+            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
         else:
             umbrella_key = section_name.split('-')[0]
             if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a verbatim part of '{umbrella_sections[umbrella_key]}' within {max_chars} characters.\n"
+                prompt += f"Section {section_name}: Extract a **distinct, verbatim part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and **no new content is introduced**.\n"
+
+    if 'CTA-Text' in [section for section, _ in template_structure]:
+        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
+
+    prompt += "\nStrictly generate content for every section, ensuring subsections extract distinct, verbatim parts from the umbrella content in proper order."
 
     return prompt, job_id
 
-def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
+def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
     for i in range(retries):
         try:
             message = client.messages.create(
@@ -132,98 +179,114 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
                 content = "No content generated."
 
             content_clean = clean_text(content)
-
-            structured_content = {}
-            content_sections = content_clean.split("\n\n")
-
-            for i, (section_name, max_chars) in enumerate(section_limits.items()):
-                if i < len(content_sections):
-                    section_content = content_sections[i]
-                    structured_content[section_name] = enforce_character_limit(section_content, max_chars)
-
-                    if '-' not in section_name:
-                        umbrella_key = section_name.split()[0]
-                        subsections = [key for key in section_limits.keys() if key.startswith(umbrella_key + '-')]
-                        if subsections:
-                            main_content = structured_content[section_name].split(': ', 1)[-1]
-                            split_content = split_content_into_umbrella(main_content, len(subsections))
-                            for j, subsection in enumerate(subsections):
-                                structured_content[subsection] = enforce_character_limit(split_content[j], section_limits[subsection])
-
-            return structured_content
+            
+            sections = {}
+            current_section = None
+            for line in content_clean.split('\n'):
+                if line.strip().startswith("Section "):
+                    current_section = line.split(":")[0].replace("Section ", "").strip()
+                    sections[current_section] = ""
+                elif current_section:
+                    sections[current_section] += line + "\n"
+            
+            for section in sections:
+                sections[section] = sections[section].strip()
+            
+            return sections
         
         except anthropic.APIError as e:
-            st.warning(f"Error generating content for Job ID {job_id}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-            time.sleep(delay)
+            if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                time.sleep(delay)
+            else:
+                st.error(f"Error generating content: {e}")
+                return None
 
-    return None
-
-def map_content_to_google_sheet(sheet, row_index, structured_content):
-    mapping = {
-        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
-        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
-        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
-        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
-        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
-        "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    social_prompts = {
+        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
+        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
+        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
     }
+    generated_content = {}
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                prompt = social_prompts[channel]
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20240620",
+                    max_tokens=500,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                if message.content and len(message.content) > 0:
+                    generated_content[channel] = message.content[0].text
+                break
+            
+            except anthropic.APIError as e:
+                if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                    time.sleep(delay)
+                else:
+                    st.error(f"Error generating {channel} content: {e}")
+    return generated_content
 
-    for section, content in structured_content.items():
-        if section in mapping:
-            col_letter = mapping[section]
-            sheet.update_acell(f'{col_letter}{row_index}', content.strip())
-            time.sleep(1)
-
-    for section, col_letter in mapping.items():
-        if section not in structured_content:
-            sheet.update_acell(f'{col_letter}{row_index}', '')
-            time.sleep(1)
-
-def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content):
+def update_google_sheet(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     gc = gspread.authorize(credentials)
     
-    job_id_normalized = job_id.strip().lower()
-
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        rows = sheet.get_all_values()
-
-        for i, row in enumerate(rows):
-            job_id_in_sheet = row[1].strip().lower() if row[1].strip() else None
-            if not job_id_in_sheet:
-                continue
-            
-            if job_id_in_sheet == job_id_normalized:
-                row_index = i + 1
-
-                if generated_content:
-                    map_content_to_google_sheet(sheet, row_index, generated_content)
-
-                st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
-                return True
-
-        st.error(f"No matching Job ID found for '{job_id}' in the target sheet.")
-        return False
-
-    except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return False
+        
+        cell = sheet.find(job_id, in_column=2)
+        if not cell:
+            st.warning(f"Job ID {job_id} not found in the sheet.")
+            return
+        
+        row = cell.row
+        
+        section_to_column = {
+            "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
+            "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
+            "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
+            "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
+            "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
+            "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
+        }
+        
+        updates = []
+        for section, content in generated_content.items():
+            if section in section_to_column:
+                col = gspread.utils.a1_to_rowcol(section_to_column[section] + '1')[1]
+                updates.append({
+                    'range': sheet.cell(row, col),
+                    'values': [[content]]
+                })
+        
+        if updates:
+            sheet.batch_update(updates)
+        
+        st.success(f"Updated Google Sheet for Job ID {job_id}")
+    except Exception as e:
+        st.error(f"Error updating Google Sheet: {e}")
 
 def main():
-    st.title("AI Script Generator with Template Enforced Content")
+    st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
-    request_sheet_id = '1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8'
+    if 'sheet_data' not in st.session_state:
+        st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+    if 'examples_data' not in st.session_state:
+        st.session_state['examples_data'] = load_examples()
 
-    sheet_data = load_google_sheet(request_sheet_id)
-    examples_data = load_examples()
+    sheet_data = st.session_state['sheet_data']
+    examples_data = st.session_state['examples_data']
 
     if sheet_data.empty or examples_data.empty:
-        st.error("No data available from the request Google Sheet or the examples CSV.")
+        st.error("No data available from Google Sheets or Templates CSV.")
         return
 
     st.dataframe(sheet_data)
@@ -232,29 +295,83 @@ def main():
         st.session_state['generated_contents'] = []
 
     if st.button("Generate Content"):
+        generated_contents = []
         for idx, row in sheet_data.iterrows():
-            if not row['Job ID']:
-                st.warning(f"Row {idx + 1} is missing Job ID. Skipping this row.")
+            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+                st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
-
-            job_id = row['Job ID']
-            selected_template = row['Selected-Template']
-            template_structure = extract_template_structure(selected_template, examples_data)
-
+            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
-                st.error(f"No template found for Job ID {job_id}. Skipping this row.")
                 continue
-
             prompt, job_id = build_template_prompt(row, template_structure)
 
-            if not prompt:
-                st.warning(f"Could not build prompt for Job ID {job_id}. Skipping this row.")
+            if not prompt or not job_id:
                 continue
 
-            generated_content = generate_and_split_content(prompt, job_id, dict(template_structure))
-
+            generated_content = generate_content_with_retry(prompt, job_id, template_structure)
             if generated_content:
-                update_google_sheet_with_generated_content(sheet_id, job_id, generated_content)
+                generated_contents.append((job_id, generated_content))
+                
+                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
+
+        st.session_state['generated_contents'] = generated_contents
+        
+        for job_id, content in generated_contents:
+            st.subheader(f"Generated Content for Job ID: {job_id}")
+            for section, text in content.items():
+                st.text_area(f"Section {section}", text, height=100)
+            st.markdown("---")
+
+    st.markdown("---")
+    st.header("Generate Social Media Posts")
+    
+    if 'selected_channels' not in st.session_state:
+        st.session_state['selected_channels'] = []
+
+    facebook = st.checkbox("Facebook", value="facebook" in st.session_state['selected_channels'])
+    linkedin = st.checkbox("LinkedIn", value="linkedin" in st.session_state['selected_channels'])
+    instagram = st.checkbox("Instagram", value="instagram" in st.session_state['selected_channels'])
+
+    selected_channels = []
+    if facebook:
+        selected_channels.append("facebook")
+    if linkedin:
+        selected_channels.append("linkedin")
+    if instagram:
+        selected_channels.append("instagram")
+    
+    st.session_state['selected_channels'] = selected_channels
+
+    if selected_channels and 'generated_contents' in st.session_state:
+        if 'social_media_contents' not in st.session_state:
+            st.session_state['social_media_contents'] = []
+
+        if st.button("Generate Social Media Content"):
+            social_media_contents = []
+            for job_id, generated_content in st.session_state['generated_contents']:
+                combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
+                social_content_for_row = generate_social_content_with_retry(combined_content, selected_channels)
+
+                if social_content_for_row:
+                    social_media_contents.append((job_id, social_content_for_row))
+            
+            st.session_state['social_media_contents'] = social_media_contents
+
+    if 'social_media_contents' in st.session_state:
+        for job_id, social_content in st.session_state['social_media_contents']:
+            st.subheader(f"Generated Social Media Content for Job ID: {job_id}")
+            for channel, content in social_content.items():
+                st.subheader(f"{channel.capitalize()} Post")
+                st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content_{job_id}")
+                st.download_button(
+                    label=f"Download {channel.capitalize()} Content",
+                    data=content,
+                    file_name=f"{channel}_post_{job_id}.txt",
+                    mime="text/plain",
+                    key=f"download_{channel}_{job_id}"
+                )
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
