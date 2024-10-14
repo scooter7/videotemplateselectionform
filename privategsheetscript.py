@@ -53,7 +53,7 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Function to extract template structure and max characters per section
+# Function to extract the template structure and max characters per section
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -78,6 +78,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
+# Build the content generation prompt using job details
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -93,26 +94,21 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Function to split generated content according to character limits
-def split_content_by_character_limits(content, section_limits):
+# Function to split content based on character limits and create subsections for umbrella structure
+def split_content_into_umbrella(content, section_name):
     words = content.split()
-    sections = {}
-    word_idx = 0
+    midpoint = len(words) // 2
 
-    for section, max_chars in section_limits.items():
-        section_content = []
-        char_count = 0
-        
-        while word_idx < len(words) and (char_count + len(words[word_idx]) + 1) <= max_chars:
-            section_content.append(words[word_idx])
-            char_count += len(words[word_idx]) + 1
-            word_idx += 1
+    if len(words) > 1:
+        first_half = " ".join(words[:midpoint])
+        second_half = " ".join(words[midpoint:])
+    else:
+        first_half = content
+        second_half = ""
 
-        sections[section] = " ".join(section_content).strip()
+    return first_half, second_half
 
-    return sections
-
-# Generate and split content based on template structure
+# Function to generate and split content based on template structure
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -129,7 +125,18 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
                 content = "No content generated."
 
             content_clean = clean_text(content)
-            structured_content = split_content_by_character_limits(content_clean, section_limits)
+            
+            # Split the content based on umbrella structure
+            structured_content = {}
+            for section_name, max_chars in section_limits.items():
+                # Get the content for this section
+                content_section = content_clean[:max_chars].strip()  # Limit content to the max characters
+                first_half, second_half = split_content_into_umbrella(content_section, section_name)
+
+                # Map main section and subsections
+                structured_content[section_name] = content_section
+                structured_content[f"{section_name}-1"] = first_half
+                structured_content[f"{section_name}-2"] = second_half
 
             return structured_content
         
@@ -156,39 +163,7 @@ def map_content_to_google_sheet(sheet, row_index, structured_content):
             sheet.update_acell(f'{col_letter}{row_index}', content)
             time.sleep(1)
 
-# Generate social content with retries
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
-        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
-        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
-    }
-    
-    generated_content = {}
-    
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = social_prompts[channel]
-                
-                message = client.messages.create(
-                    model="claude-3-5-sonnet-20240620",
-                    max_tokens=500,
-                    temperature=0.7,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                
-                if message.content and len(message.content) > 0:
-                    generated_content[channel] = message.content[0].text
-                break
-            
-            except anthropic.APIError as e:
-                st.warning(f"Error generating {channel} content: {e}. Retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                time.sleep(delay)
-    
-    return generated_content
-
-def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries=3):
+def update_google_sheet_with_generated_content(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
@@ -211,21 +186,6 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
                 if generated_content:
                     map_content_to_google_sheet(sheet, row_index, generated_content)
 
-                if social_media_content:
-                    sm_columns = {
-                        "LinkedIn-Post-Content-Reco": 'BU',
-                        "Facebook-Post-Content-Reco": 'BV',
-                        "Instagram-Post-Content-Reco": 'BW',
-                        "YouTube-Post-Content-Reco": 'BX',
-                        "Blog-Post-Content-Reco": 'BY',
-                        "Email-Post-Content-Reco": 'BZ'
-                    }
-                    for channel, content in social_media_content.items():
-                        if channel in sm_columns:
-                            col_letter = sm_columns[channel]
-                            sheet.update_acell(f'{col_letter}{row_index}', content)
-                            time.sleep(1)
-                
                 st.success(f"Content for Job ID {job_id} successfully updated in the Google Sheet.")
                 return True
 
@@ -239,7 +199,7 @@ def update_google_sheet_with_generated_content(sheet_id, job_id, generated_conte
         if retries > 0 and e.response.status_code == 500:
             st.warning(f"Internal error encountered. Retrying... ({retries} retries left)")
             time.sleep(5)
-            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content, retries-1)
+            return update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, retries-1)
         else:
             st.error(f"An error occurred while updating the Google Sheet: {e.response.json()}")
             return False
@@ -262,9 +222,6 @@ def main():
 
     if 'generated_contents' not in st.session_state:
         st.session_state['generated_contents'] = []
-
-    selected_channels = st.multiselect("Select social media channels to generate content for:", 
-                                       ["facebook", "linkedin", "instagram"])
 
     if st.button("Generate Content"):
         for idx, row in sheet_data.iterrows():
@@ -289,8 +246,7 @@ def main():
             generated_content = generate_and_split_content(prompt, job_id, template_structure)
 
             if generated_content:
-                social_media_content = generate_social_content_with_retry(generated_content['Text01'], selected_channels)
-                update_google_sheet_with_generated_content(sheet_id, job_id, generated_content, social_media_content)
+                update_google_sheet_with_generated_content(sheet_id, job_id, generated_content)
 
 if __name__ == "__main__":
     main()
