@@ -104,13 +104,14 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
+    # Construct the prompt based on job description and template structure
     prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet:\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
     prompt += "Follow the exact template and section structure below, dividing umbrella sections verbatim into distinct subsections. Do not introduce any new or irrelevant content. Stay within character limits.\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
-        max_chars = len(content)
+        max_chars = content  # This is already an integer, no need for len()
         if '-' not in section_name:
             umbrella_sections[section_name] = section_name
             prompt += f"{section_name}: Stay within {max_chars} characters. Generate text strictly based on the Google Sheet description.\n"
