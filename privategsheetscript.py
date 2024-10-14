@@ -155,7 +155,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 prompt=prompt,
                 model="claude-2",
                 max_tokens_to_sample=2000,
-                temperature=0.1,
+                temperature=0.1,  # Changed temperature to 0.1
             )
 
             content = response.completion if response.completion else "No content generated."
@@ -301,7 +301,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     prompt=prompt,
                     model="claude-2",
                     max_tokens_to_sample=500,
-                    temperature=0.7,
+                    temperature=0.1,  # Changed temperature to 0.1
                 )
 
                 content = response.completion if response.completion else "No content generated."
@@ -401,6 +401,21 @@ def main():
                             # Handle other sections if necessary
                             generated_content[section_name] = ""
 
+                # Generate social media posts for LinkedIn, Facebook, and Instagram
+                social_channels = ['LinkedIn', 'Facebook', 'Instagram']
+                combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
+                social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
+
+                # Map social media content to the appropriate section names
+                social_media_section_names = {
+                    'LinkedIn': 'LinkedIn-Post-Content-Reco',
+                    'Facebook': 'Facebook-Post-Content-Reco',
+                    'Instagram': 'Instagram-Post-Content-Reco'
+                }
+                for channel in social_channels:
+                    section_name = social_media_section_names[channel]
+                    generated_content[section_name] = social_media_contents.get(channel, "")
+
                 generated_contents.append((job_id, generated_content))
 
                 # Update the response sheet with generated content
@@ -413,55 +428,6 @@ def main():
             for section, text in content.items():
                 st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
             st.markdown("---")
-
-    st.markdown("---")
-    st.header("Generate Social Media Posts")
-
-    if 'selected_channels' not in st.session_state:
-        st.session_state['selected_channels'] = []
-
-    facebook = st.checkbox("Facebook", value="facebook" in st.session_state['selected_channels'])
-    linkedin = st.checkbox("LinkedIn", value="linkedin" in st.session_state['selected_channels'])
-    instagram = st.checkbox("Instagram", value="instagram" in st.session_state['selected_channels'])
-
-    selected_channels = []
-    if facebook:
-        selected_channels.append("facebook")
-    if linkedin:
-        selected_channels.append("linkedin")
-    if instagram:
-        selected_channels.append("instagram")
-
-    st.session_state['selected_channels'] = selected_channels
-
-    if selected_channels and 'generated_contents' in st.session_state:
-        if 'social_media_contents' not in st.session_state:
-            st.session_state['social_media_contents'] = []
-
-        if st.button("Generate Social Media Content"):
-            social_media_contents = []
-            for job_id, generated_content in st.session_state['generated_contents']:
-                combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
-                social_content_for_row = generate_social_content_with_retry(combined_content, selected_channels)
-
-                if social_content_for_row:
-                    social_media_contents.append((job_id, social_content_for_row))
-
-            st.session_state['social_media_contents'] = social_media_contents
-
-    if 'social_media_contents' in st.session_state:
-        for job_id, social_content in st.session_state['social_media_contents']:
-            st.subheader(f"Generated Social Media Content for Job ID: {job_id}")
-            for channel, content in social_content.items():
-                st.subheader(f"{channel.capitalize()} Post")
-                st.text_area(f"{channel.capitalize()} Content", content, height=200, key=f"{channel}_content_{job_id}")
-                st.download_button(
-                    label=f"Download {channel.capitalize()} Content",
-                    data=content,
-                    file_name=f"{channel}_post_{job_id}.txt",
-                    mime="text/plain",
-                    key=f"download_{channel}_{job_id}"
-                )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
