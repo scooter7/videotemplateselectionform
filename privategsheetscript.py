@@ -5,6 +5,7 @@ import anthropic
 from google.oauth2.service_account import Credentials
 import gspread
 import time
+from collections import defaultdict
 
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Client(api_key=anthropic_api_key)
@@ -56,13 +57,31 @@ st.markdown(
 
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    credentials = Credentials.from_service_account_info(
+        credentials_info, scopes=scopes
+    )
     gc = gspread.authorize(credentials)
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        data = pd.DataFrame(sheet.get_all_records())
-        return data
+        data = sheet.get_all_values()
+        headers = data[0]
+        header_counts = defaultdict(int)
+        new_headers = []
+        for h in headers:
+            count = header_counts[h]
+            if count > 0:
+                new_h = f"{h}_{count}"
+            else:
+                new_h = h
+            new_headers.append(new_h)
+            header_counts[h] +=1
+        rows = data[1:]
+        df = pd.DataFrame(rows, columns=new_headers)
+        return df
     except gspread.SpreadsheetNotFound:
         st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
         return pd.DataFrame()
@@ -113,12 +132,9 @@ def extract_template_structure(selected_template, examples_data):
                 template_structure.append((col, text_element))
     return template_structure
 
-def build_template_prompt(sheet_row, template_structure):
-    job_id = sheet_row['Job ID']
-    topic_description = sheet_row['Topic-Description']
-
-    if not (job_id and topic_description and template_structure):
-        return None, None
+def build_template_prompt(topic_description, template_structure):
+    if not (topic_description and template_structure):
+        return None
 
     prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. Use the description to generate content for each section, and stay within the specified character limits.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
@@ -129,9 +145,9 @@ def build_template_prompt(sheet_row, template_structure):
 
     prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'.\n" + anthropic.AI_PROMPT
 
-    return prompt, job_id
+    return prompt
 
-def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
+def generate_content_with_retry(prompt, retries=3, delay=5):
     for i in range(retries):
         try:
             response = client.completions.create(
@@ -151,8 +167,9 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
                 if line.strip().startswith("Section "):
                     current_section = line.split(":")[0].replace("Section ", "").strip()
                     sections[current_section] = ""
-                    line_content = line.split(":", 1)[1].strip()
-                    sections[current_section] += line_content + "\n"
+                    if ":" in line:
+                        line_content = line.split(":", 1)[1].strip()
+                        sections[current_section] += line_content + "\n"
                 elif current_section:
                     sections[current_section] += line + "\n"
 
@@ -198,8 +215,13 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
 
 def update_google_sheet(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    credentials = Credentials.from_service_account_info(
+        credentials_info, scopes=scopes
+    )
     gc = gspread.authorize(credentials)
 
     try:
@@ -212,21 +234,34 @@ def update_google_sheet(sheet_id, job_id, generated_content):
 
         row = cell.row
 
-        # Get all column letters dynamically
-        columns = sheet.row_values(1)
-        if len(set(columns)) != len(columns):
-            raise gspread.GSpreadException("The header row in the worksheet is not unique.")
-
-        section_to_column = {col: gspread.utils.rowcol_to_a1(1, idx+1)[0] for idx, col in enumerate(columns)}
+        headers = sheet.row_values(1)
+        header_to_col = {}
+        header_counts = defaultdict(int)
+        for idx, h in enumerate(headers):
+            count = header_counts[h]
+            if count > 0:
+                new_h = f"{h}_{count}"
+            else:
+                new_h = h
+            header_counts[h] +=1
+            header_to_col[new_h] = idx +1  # 1-based indexing
 
         for section, content in generated_content.items():
-            if section in section_to_column:
-                cell_range = f'{section_to_column[section]}{row}'
-                sheet.update(cell_range, content)
-
+            if section in header_to_col:
+                col = header_to_col[section]
+                sheet.update_cell(row, col, content)
+            else:
+                st.warning(f"Section {section} not found in sheet headers.")
         st.success(f"Updated Google Sheet for Job ID {job_id}")
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
+
+def get_column_name(df, name):
+    cols = [col for col in df.columns if col == name or col.startswith(name + '_')]
+    if cols:
+        return cols[0]
+    else:
+        return None
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
@@ -251,20 +286,32 @@ def main():
 
     if st.button("Generate Content"):
         generated_contents = []
+        job_id_col = get_column_name(sheet_data, 'Job ID')
+        selected_template_col = get_column_name(sheet_data, 'Selected-Template')
+        topic_description_col = get_column_name(sheet_data, 'Topic-Description')
+
+        if not all([job_id_col, selected_template_col, topic_description_col]):
+            st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description') not found in the sheet.")
+            return
+
         for idx, row in sheet_data.iterrows():
-            if not (row['Job ID'] and row['Selected-Template'] and row['Topic-Description']):
+            job_id = row[job_id_col]
+            selected_template = row[selected_template_col]
+            topic_description = row[topic_description_col]
+
+            if not (job_id and selected_template and topic_description):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
-            template_structure = extract_template_structure(row['Selected-Template'], examples_data)
+            template_structure = extract_template_structure(selected_template, examples_data)
             if template_structure is None:
-                st.warning(f"Template {row['Selected-Template']} not found in examples data.")
+                st.warning(f"Template {selected_template} not found in examples data.")
                 continue
-            prompt, job_id = build_template_prompt(row, template_structure)
+            prompt = build_template_prompt(topic_description, template_structure)
 
-            if not prompt or not job_id:
+            if not prompt:
                 continue
 
-            generated_content = generate_content_with_retry(prompt, job_id, template_structure)
+            generated_content = generate_content_with_retry(prompt)
             if generated_content:
                 generated_contents.append((job_id, generated_content))
 
