@@ -80,7 +80,7 @@ def load_examples():
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
-        "[" 
+        "["
         u"\U0001F600-\U0001F64F"  
         u"\U0001F300-\U0001F5FF"  
         u"\U0001F680-\U0001F6FF"  
@@ -134,17 +134,17 @@ def build_template_prompt(sheet_row, template_structure):
 def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
     for i in range(retries):
         try:
-            response = client.completion(
+            response = client.completions.create(
                 prompt=prompt,
                 model="claude-2",
                 max_tokens_to_sample=1000,
                 temperature=0.7,
             )
-            
-            content = response.get('completion', "No content generated.")
+
+            content = response.completion if response.completion else "No content generated."
 
             content_clean = clean_text(content)
-            
+
             sections = {}
             current_section = None
             for line in content_clean.split('\n'):
@@ -160,8 +160,8 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
                 sections[section] = sections[section].strip()
 
             return sections
-        
-        except anthropic.APIError as e:
+
+        except anthropic.ApiException as e:
             if 'overloaded' in str(e).lower() and i < retries - 1:
                 st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                 time.sleep(delay)
@@ -175,18 +175,18 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
         for i in range(retries):
             try:
                 prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
-                response = client.completion(
+                response = client.completions.create(
                     prompt=prompt,
                     model="claude-2",
                     max_tokens_to_sample=500,
                     temperature=0.7,
                 )
-                
-                content = response.get('completion', "No content generated.")
+
+                content = response.completion if response.completion else "No content generated."
                 generated_content[channel] = content
                 break
-            
-            except anthropic.APIError as e:
+
+            except anthropic.ApiException as e:
                 if 'overloaded' in str(e).lower() and i < retries - 1:
                     st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                     time.sleep(delay)
@@ -201,26 +201,29 @@ def update_google_sheet(sheet_id, job_id, generated_content):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     gc = gspread.authorize(credentials)
-    
+
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-        
+
         cell = sheet.find(job_id, in_column=2)
         if not cell:
             st.warning(f"Job ID {job_id} not found in the sheet.")
             return
-        
+
         row = cell.row
 
         # Get all column letters dynamically
         columns = sheet.row_values(1)
+        if len(set(columns)) != len(columns):
+            raise gspread.GSpreadException("The header row in the worksheet is not unique.")
+
         section_to_column = {col: gspread.utils.rowcol_to_a1(1, idx+1)[0] for idx, col in enumerate(columns)}
 
         for section, content in generated_content.items():
             if section in section_to_column:
                 cell_range = f'{section_to_column[section]}{row}'
                 sheet.update(cell_range, content)
-        
+
         st.success(f"Updated Google Sheet for Job ID {job_id}")
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
@@ -264,11 +267,11 @@ def main():
             generated_content = generate_content_with_retry(prompt, job_id, template_structure)
             if generated_content:
                 generated_contents.append((job_id, generated_content))
-                
+
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
 
         st.session_state['generated_contents'] = generated_contents
-        
+
         for job_id, content in generated_contents:
             st.subheader(f"Generated Content for Job ID: {job_id}")
             for section, text in content.items():
@@ -277,7 +280,7 @@ def main():
 
     st.markdown("---")
     st.header("Generate Social Media Posts")
-    
+
     if 'selected_channels' not in st.session_state:
         st.session_state['selected_channels'] = []
 
@@ -292,7 +295,7 @@ def main():
         selected_channels.append("linkedin")
     if instagram:
         selected_channels.append("instagram")
-    
+
     st.session_state['selected_channels'] = selected_channels
 
     if selected_channels and 'generated_contents' in st.session_state:
@@ -307,7 +310,7 @@ def main():
 
                 if social_content_for_row:
                     social_media_contents.append((job_id, social_content_for_row))
-            
+
             st.session_state['social_media_contents'] = social_media_contents
 
     if 'social_media_contents' in st.session_state:
