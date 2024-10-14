@@ -137,12 +137,12 @@ def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. Ensure that the content for each section does not exceed the specified character limit. Do not include any mention of character counts or limits in your output.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. Ensure that the content for each section conveys complete ideas, even if you need to slightly exceed the character limit. Do not include any mention of character counts or limits in your output.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
     for section_name, max_chars in template_structure:
         if '-' not in section_name:
-            prompt += f"Section {section_name}: (max {max_chars} characters)\n"
+            prompt += f"Section {section_name}:\n"
 
     prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections. Do not include any additional text or explanations.\n" + anthropic.AI_PROMPT
 
@@ -179,11 +179,28 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 elif current_section:
                     sections[current_section] += ' ' + line.strip()
 
-            # Trim content to character limits
+            # Trim content to character limits without cutting off mid-word
             for section in sections:
                 limit = section_character_limits.get(section, None)
                 if limit:
-                    sections[section] = sections[section][:limit].strip()
+                    content = sections[section]
+                    if len(content) > limit:
+                        # Find the last space before the limit
+                        last_space = content.rfind(' ', 0, limit)
+                        if last_space == -1:
+                            # No space found, include the whole word even if it exceeds the limit
+                            sections[section] = content[:limit]
+                        else:
+                            # Include words up to the last space
+                            sections[section] = content[:last_space]
+                    # Ensure complete ideas are conveyed
+                    # Optionally, extend slightly beyond the limit to complete the sentence
+                    if not content.endswith(('.', '!', '?')):
+                        # Find the next punctuation mark
+                        next_punct = re.search(r'[.!?]', content)
+                        if next_punct:
+                            end_idx = next_punct.end()
+                            sections[section] = content[:end_idx]
 
             return sections
 
@@ -197,7 +214,6 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
 
 def divide_content_verbatim(main_content, subsections, section_character_limits):
     words = main_content.split()
-    total_chars = len(main_content)
     num_subsections = len(subsections)
     subsections_content = {}
     start_idx = 0
@@ -206,16 +222,28 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
         if limit is None:
             continue
 
-        # Determine the end index based on character limit
-        end_idx = start_idx
-        current_chars = 0
-        while end_idx < len(words) and current_chars + len(words[end_idx]) + (1 if current_chars > 0 else 0) <= limit:
-            current_chars += len(words[end_idx]) + (1 if current_chars > 0 else 0)
-            end_idx +=1
+        current_content = ''
+        while start_idx < len(words):
+            word = words[start_idx]
+            if len(current_content) + len(word) + 1 > limit:
+                break
+            if current_content:
+                current_content += ' '
+            current_content += word
+            start_idx += 1
 
-        subsection_content = ' '.join(words[start_idx:end_idx])
-        subsections_content[subsection] = subsection_content.strip()
-        start_idx = end_idx
+        # If word exceeds the limit but we have no content yet, include it anyway
+        if not current_content and start_idx < len(words):
+            current_content = words[start_idx]
+            start_idx += 1
+
+        subsections_content[subsection] = current_content
+
+    # If there are remaining words, add them to the last subsection
+    if start_idx < len(words):
+        last_subsection = subsections[-1]
+        remaining_content = ' '.join(words[start_idx:])
+        subsections_content[last_subsection] += ' ' + remaining_content
 
     return subsections_content
 
@@ -363,6 +391,21 @@ def main():
                         divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
                         # Add subsections to generated_content
                         generated_content.update(divided_contents)
+
+                # Include any sections that were not main sections or subsections (e.g., CTA)
+                for section_name, max_chars in template_structure:
+                    if section_name not in generated_content:
+                        if 'CTA' in section_name:
+                            # Generate CTA content
+                            cta_prompt = f"{anthropic.HUMAN_PROMPT}Based on the following description, generate a Call To Action (CTA) that encourages the audience to take the next step. Keep it concise and engaging.\n\nDescription:\n{topic_description}\n\n{anthropic.AI_PROMPT}"
+                            cta_content = generate_content_with_retry(cta_prompt, {section_name: max_chars})
+                            if cta_content and section_name in cta_content:
+                                generated_content[section_name] = cta_content[section_name]
+                            else:
+                                generated_content[section_name] = "Learn more on our website."
+                        else:
+                            # Handle other sections if necessary
+                            generated_content[section_name] = ""
 
                 generated_contents.append((job_id, generated_content))
 
