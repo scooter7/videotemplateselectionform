@@ -137,15 +137,15 @@ def build_template_prompt(topic_description, template_structure):
         return None
 
     # Only include main sections in the prompt
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. The content should be concise and within the specified character limits.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. The content should be concise and within the specified character limits. Do not include character limit information in your output.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
     for section_name, content in template_structure:
         if '-' not in section_name:
-            max_chars = len(content)
-            prompt += f"Section {section_name}: [Content] (max {max_chars} characters)\n"
+            # This is a main section
+            prompt += f"Section {section_name}:\n"
 
-    prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections.\n" + anthropic.AI_PROMPT
+    prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections. Do not include any additional text or explanations.\n" + anthropic.AI_PROMPT
 
     return prompt
 
@@ -166,13 +166,14 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
             sections = {}
             current_section = None
             for line in content_clean.split('\n'):
-                if line.strip().startswith("Section "):
-                    section_header = line.strip().split(":", 1)
+                line = line.strip()
+                if line.startswith("Section "):
+                    section_header = line.split(":", 1)
                     if len(section_header) == 2:
                         section_name = section_header[0].replace("Section ", "").strip()
                         section_content = section_header[1].strip()
                     else:
-                        section_name = line.strip().replace("Section ", "").strip()
+                        section_name = line.replace("Section ", "").strip()
                         section_content = ""
                     current_section = section_name
                     sections[current_section] = section_content
@@ -192,22 +193,20 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
                 st.error(f"Error generating content: {e}")
                 return None
 
-def divide_content_among_subsections(main_content, num_subsections):
+def divide_content_verbatim(main_content, subsections):
     words = main_content.split()
+    num_subsections = len(subsections)
     total_words = len(words)
     words_per_subsection = total_words // num_subsections
-    subsections = {}
+    remainder = total_words % num_subsections
+    subsections_content = {}
     start = 0
-    for i in range(num_subsections):
-        end = start + words_per_subsection
-        if i == num_subsections - 1:
-            # Include any remaining words in the last subsection
-            end = total_words
+    for i, subsection in enumerate(subsections):
+        end = start + words_per_subsection + (1 if i < remainder else 0)
         subsection_content = ' '.join(words[start:end])
-        subsection_name = f"{main_section}-{i+1}"
-        subsections[subsection_name] = subsection_content
+        subsections_content[subsection] = subsection_content
         start = end
-    return subsections
+    return subsections_content
 
 def update_google_sheet(sheet_id, job_id, generated_content):
     credentials_info = st.secrets["google_credentials"]
@@ -386,20 +385,32 @@ def main():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-def divide_content_verbatim(main_content, subsections):
-    words = main_content.split()
-    num_subsections = len(subsections)
-    total_words = len(words)
-    words_per_subsection = total_words // num_subsections
-    remainder = total_words % num_subsections
-    subsections_content = {}
-    start = 0
-    for i, subsection in enumerate(subsections):
-        end = start + words_per_subsection + (1 if i < remainder else 0)
-        subsection_content = ' '.join(words[start:end])
-        subsections_content[subsection] = subsection_content
-        start = end
-    return subsections_content
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    generated_content = {}
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
+                response = client.completions.create(
+                    prompt=prompt,
+                    model="claude-2",
+                    max_tokens_to_sample=500,
+                    temperature=0.7,
+                )
+
+                content = response.completion if response.completion else "No content generated."
+                generated_content[channel] = content
+                break
+
+            except anthropic.ApiException as e:
+                if 'overloaded' in str(e).lower() and i < retries - 1:
+                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                    time.sleep(delay)
+                else:
+                    st.error(f"Error generating {channel} content: {e}")
+        else:
+            generated_content[channel] = ""
+    return generated_content
 
 if __name__ == "__main__":
     main()
