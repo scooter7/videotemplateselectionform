@@ -84,7 +84,6 @@ def split_content_by_character_limits(content, section_limits):
     sections = {}
     word_idx = 0
 
-    # Split content into sections and subsections
     for section, max_chars in section_limits.items():
         section_content = []
         char_count = 0
@@ -97,7 +96,7 @@ def split_content_by_character_limits(content, section_limits):
         full_content = " ".join(section_content).strip()
         sections[section] = full_content
 
-        # Further split the section into subsections like Text01-1, Text01-2
+        # Split the section into subsections if it's a main section like Text01, Text02, etc.
         if '-' not in section:
             split_point = len(full_content) // 2
             sections[f"{section}-1"] = full_content[:split_point].strip()
@@ -135,12 +134,12 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 # Map structured content to Google Sheet cells based on the umbrella model
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
-        "Text01": "H", "Text01-1": "I", "Text01-2": "J", 
-        "Text02": "N", "Text02-1": "O", "Text02-2": "P", 
-        "Text03": "T", "Text03-1": "U", "Text03-2": "V", 
-        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", 
-        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH",
-        "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN"
+        "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
+        "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
+        "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
+        "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
+        "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
+        "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
     }
 
     for section, content in structured_content.items():
