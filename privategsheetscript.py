@@ -196,9 +196,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 return None
 
 def divide_content_verbatim(main_content, subsections, section_character_limits):
-    words = main_content.split()
     total_chars = len(main_content)
-    num_subsections = len(subsections)
     subsections_content = {}
     start_idx = 0
     for subsection in subsections:
@@ -207,13 +205,8 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
             continue
 
         # Determine the end index based on character limit
-        end_idx = start_idx
-        current_chars = 0
-        while end_idx < len(words) and current_chars + len(words[end_idx]) + (1 if current_chars > 0 else 0) <= limit:
-            current_chars += len(words[end_idx]) + (1 if current_chars > 0 else 0)
-            end_idx +=1
-
-        subsection_content = ' '.join(words[start_idx:end_idx])
+        end_idx = start_idx + limit
+        subsection_content = main_content[start_idx:end_idx]
         subsections_content[subsection] = subsection_content.strip()
         start_idx = end_idx
 
@@ -363,6 +356,14 @@ def main():
                         divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
                         # Add subsections to generated_content
                         generated_content.update(divided_contents)
+
+                # Include any sections that were not main sections or subsections (e.g., CTA)
+                for section_name, max_chars in template_structure:
+                    if section_name not in generated_content and '-' not in section_name:
+                        # Generate content for this section if it's a special section like CTA
+                        if 'CTA' in section_name:
+                            # For CTA, we can provide a default or generate based on topic_description
+                            generated_content[section_name] = topic_description[:max_chars].strip()
 
                 generated_contents.append((job_id, generated_content))
 
