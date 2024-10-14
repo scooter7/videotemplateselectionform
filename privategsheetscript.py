@@ -155,7 +155,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 prompt=prompt,
                 model="claude-2",
                 max_tokens_to_sample=2000,
-                temperature=0.7,
+                temperature=0.1,
             )
 
             content = response.completion if response.completion else "No content generated."
