@@ -54,15 +54,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-possible_columns = [
-    "Text01", "Text01-1", "Text01-2", "Text01-3", "Text01-4", "01BG-Theme-Text",
-    "Text02", "Text02-1", "Text02-2", "Text02-3", "Text02-4", "02BG-Theme-Text",
-    "Text03", "Text03-1", "Text03-2", "Text03-3", "Text03-4", "03BG-Theme-Text",
-    "Text04", "Text04-1", "Text04-2", "Text04-3", "Text04-4", "04BG-Theme-Text",
-    "Text05", "Text05-1", "Text05-2", "Text05-3", "Text05-4", "05BG-Theme-Text",
-    "CTA-Text", "CTA-Text-1", "CTA-Text-2", "Tagline-Text"
-]
-
 def load_google_sheet(sheet_id):
     credentials_info = st.secrets["google_credentials"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -111,27 +102,16 @@ def extract_template_structure(selected_template, examples_data):
         template_number_str = "01"
 
     example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
-
     if example_row.empty:
         return None
 
     template_structure = []
-    for col in possible_columns:
-        if col in example_row.columns:
+    for col in example_row.columns:
+        if col != 'Template':
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
                 template_structure.append((col, text_element))
-
     return template_structure
-
-def enforce_character_limit(content, max_chars):
-    relaxed_limit = max_chars + 20
-    if len(content) > relaxed_limit:
-        truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
-        if not truncated_content:
-            return content[:max_chars].rstrip() + "..."
-        return truncated_content + "..."
-    return content
 
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
@@ -140,26 +120,14 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet. Follow the section structure exactly as given, ensuring that the content of the umbrella sections is divided **verbatim** into subsections.\n\n"
-    
-    prompt += f"Description from Google Sheet:\n{topic_description}\n\n"
-    prompt += "For each section, generate content **in strict order**. Subsections must split the umbrella section **verbatim** into distinct, meaningful parts. **Do not reorder sections or introduce new content**:\n\n"
+    prompt = f"Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. Use the description to generate content for each section, and stay within the specified character limits.\n\n"
+    prompt += f"Description:\n{topic_description}\n\n"
 
-    umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
-        if '-' not in section_name:
-            umbrella_sections[section_name] = section_name
-            prompt += f"Section {section_name}: Generate content based only on the description from the Google Sheet. Stay within {max_chars} characters.\n"
-        else:
-            umbrella_key = section_name.split('-')[0]
-            if umbrella_key in umbrella_sections:
-                prompt += f"Section {section_name}: Extract a **distinct, verbatim part** of the umbrella section '{umbrella_sections[umbrella_key]}'. Ensure that subsections are ordered logically and **no new content is introduced**.\n"
+        prompt += f"Section {section_name}: Content (max {max_chars} characters)\n"
 
-    if 'CTA-Text' in [section for section, _ in template_structure]:
-        prompt += "Ensure a clear call-to-action (CTA-Text) is provided at the end of the content."
-
-    prompt += "\nStrictly generate content for every section, ensuring subsections extract distinct, verbatim parts from the umbrella content in proper order."
+    prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'."
 
     return prompt, job_id
 
@@ -173,12 +141,11 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
                 messages=[{"role": "user", "content": prompt}]
             )
             
-            if message.content and len(message.content) > 0:
-                content = message.content[0].text
-            else:
-                content = "No content generated."
+            content = message.get('completion', "No content generated.")
 
             content_clean = clean_text(content)
+            st.write("Generated content:")
+            st.write(content_clean)
             
             sections = {}
             current_section = None
@@ -186,12 +153,14 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
                 if line.strip().startswith("Section "):
                     current_section = line.split(":")[0].replace("Section ", "").strip()
                     sections[current_section] = ""
+                    line_content = line.split(":", 1)[1].strip()
+                    sections[current_section] += line_content + "\n"
                 elif current_section:
                     sections[current_section] += line + "\n"
-            
+
             for section in sections:
                 sections[section] = sections[section].strip()
-            
+
             return sections
         
         except anthropic.APIError as e:
@@ -220,8 +189,8 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     messages=[{"role": "user", "content": prompt}]
                 )
                 
-                if message.content and len(message.content) > 0:
-                    generated_content[channel] = message.content[0].text
+                content = message.get('completion', "No content generated.")
+                generated_content[channel] = content
                 break
             
             except anthropic.APIError as e:
@@ -249,16 +218,11 @@ def update_google_sheet(sheet_id, job_id, generated_content):
             return
         
         row = cell.row
-        
-        section_to_column = {
-            "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
-            "Text02": "N", "Text02-1": "O", "Text02-2": "P", "Text02-3": "Q", "Text02-4": "R", "02BG-Theme-Text": "S",
-            "Text03": "T", "Text03-1": "U", "Text03-2": "V", "Text03-3": "W", "Text03-4": "X", "03BG-Theme-Text": "Y",
-            "Text04": "Z", "Text04-1": "AA", "Text04-2": "AB", "Text04-3": "AC", "Text04-4": "AD", "04BG-Theme-Text": "AE",
-            "Text05": "AF", "Text05-1": "AG", "Text05-2": "AH", "Text05-3": "AI", "Text05-4": "AJ", "05BG-Theme-Text": "AK",
-            "CTA-Text": "AL", "CTA-Text-1": "AM", "CTA-Text-2": "AN", "Tagline-Text": "AO"
-        }
-        
+
+        # Get all column letters dynamically
+        columns = sheet.row_values(1)
+        section_to_column = {col: gspread.utils.rowcol_to_a1(1, idx+1)[0] for idx, col in enumerate(columns)}
+
         for section, content in generated_content.items():
             if section in section_to_column:
                 cell_range = f'{section_to_column[section]}{row}'
@@ -273,7 +237,7 @@ def main():
     st.markdown("---")
 
     if 'sheet_data' not in st.session_state:
-        st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
+        st.session_state['sheet_data'] = load_google_sheet('YOUR_GOOGLE_SHEET_ID')
     if 'examples_data' not in st.session_state:
         st.session_state['examples_data'] = load_examples()
 
@@ -297,6 +261,7 @@ def main():
                 continue
             template_structure = extract_template_structure(row['Selected-Template'], examples_data)
             if template_structure is None:
+                st.warning(f"Template {row['Selected-Template']} not found in examples data.")
                 continue
             prompt, job_id = build_template_prompt(row, template_structure)
 
@@ -307,7 +272,7 @@ def main():
             if generated_content:
                 generated_contents.append((job_id, generated_content))
                 
-                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
+                update_google_sheet('YOUR_GOOGLE_SHEET_ID', job_id, generated_content)
 
         st.session_state['generated_contents'] = generated_contents
         
