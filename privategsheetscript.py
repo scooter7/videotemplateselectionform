@@ -33,7 +33,21 @@ def clean_text(text):
     )
     return emoji_pattern.sub(r'', text)
 
-# Ensure we pull the exact structure from examples.csv
+# Load Google Sheets data based on sheet ID
+def load_google_sheet(sheet_id):
+    """Load Google Sheets data based on the provided sheet ID."""
+    credentials_info = st.secrets["google_credentials"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    gc = gspread.authorize(credentials)
+    try:
+        sheet = gc.open_by_key(sheet_id).sheet1
+        data = pd.DataFrame(sheet.get_all_records())
+        return data
+    except gspread.SpreadsheetNotFound:
+        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
+        return pd.DataFrame()
+
 @st.cache_data
 def load_examples():
     url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
@@ -44,7 +58,7 @@ def load_examples():
         st.error(f"Error loading examples CSV: {e}")
         return pd.DataFrame()
 
-# Extract the template structure and max characters per section from the examples CSV
+# Extract the template structure and max characters per section
 def extract_template_structure(selected_template, examples_data):
     if "template_SH_" in selected_template:
         try:
@@ -60,7 +74,6 @@ def extract_template_structure(selected_template, examples_data):
     if example_row.empty:
         return None
 
-    # Return a list of column names and example texts
     template_structure = []
     for col in possible_columns:
         if col in example_row.columns:
@@ -70,7 +83,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-# Enforce character limit to fit within a certain section limit
+# Enforce character limit for content sections
 def enforce_character_limit(content, max_chars):
     relaxed_limit = max_chars + 20  # Relax the limit by 20 characters for flexibility
     if len(content) > relaxed_limit:
@@ -80,7 +93,7 @@ def enforce_character_limit(content, max_chars):
         return truncated_content + "..."
     return content
 
-# Build the content generation prompt based on the job details and template structure
+# Build the content generation prompt based on the job details
 def build_template_prompt(sheet_row, template_structure):
     job_id = sheet_row['Job ID']
     topic_description = sheet_row['Topic-Description']
@@ -88,7 +101,6 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    # Construct the prompt based on job description and template structure
     prompt = f"Generate content for Job ID {job_id} using the description from the Google Sheet:\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
     prompt += "Follow the exact template and section structure below, dividing umbrella sections verbatim into distinct subsections. Do not introduce any new or irrelevant content. Stay within character limits.\n\n"
@@ -106,7 +118,7 @@ def build_template_prompt(sheet_row, template_structure):
 
     return prompt, job_id
 
-# Function to generate the content using Anthropic and enforce the structure
+# Generate content based on the prompt and enforce section limits
 def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=5):
     for i in range(retries):
         try:
@@ -144,7 +156,7 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
-# Split content into two halves (umbrella structure)
+# Split content into two halves for umbrella structure
 def split_content_into_umbrella(content):
     words = content.split()
     midpoint = len(words) // 2
