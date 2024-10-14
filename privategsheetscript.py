@@ -78,7 +78,7 @@ def extract_template_structure(selected_template, examples_data):
 
     return template_structure
 
-# Split the generated content according to character limits
+# Improved splitting function for the umbrella model, ensuring sections and subsections follow logical boundaries
 def split_content_by_character_limits(content, section_limits):
     words = content.split()
     sections = {}
@@ -88,6 +88,7 @@ def split_content_by_character_limits(content, section_limits):
         section_content = []
         char_count = 0
 
+        # Collect words to fit within the character limit for each section
         while word_idx < len(words) and (char_count + len(words[word_idx]) + 1) <= max_chars:
             section_content.append(words[word_idx])
             char_count += len(words[word_idx]) + 1
@@ -96,11 +97,13 @@ def split_content_by_character_limits(content, section_limits):
         full_content = " ".join(section_content).strip()
         sections[section] = full_content
 
-        # Split the section into subsections if it's a main section like Text01, Text02, etc.
+        # Split the main section into subsections like Text01-1, Text01-2
         if '-' not in section:
-            split_point = len(full_content) // 2
-            sections[f"{section}-1"] = full_content[:split_point].strip()
-            sections[f"{section}-2"] = full_content[split_point:].strip()
+            words_in_full_content = full_content.split()
+            midpoint = len(words_in_full_content) // 2
+
+            sections[f"{section}-1"] = " ".join(words_in_full_content[:midpoint]).strip()
+            sections[f"{section}-2"] = " ".join(words_in_full_content[midpoint:]).strip()
 
     return sections
 
@@ -131,7 +134,7 @@ def generate_and_split_content(prompt, job_id, section_limits, retries=3, delay=
 
     return None
 
-# Map structured content to Google Sheet cells based on the umbrella model
+# Improved function to map structured content to Google Sheet columns (H-BZ) with umbrella model adherence
 def map_content_to_google_sheet(sheet, row_index, structured_content):
     mapping = {
         "Text01": "H", "Text01-1": "I", "Text01-2": "J", "Text01-3": "K", "Text01-4": "L", "01BG-Theme-Text": "M",
