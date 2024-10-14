@@ -120,32 +120,30 @@ def build_template_prompt(sheet_row, template_structure):
     if not (job_id and topic_description and template_structure):
         return None, None
 
-    prompt = f"Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. Use the description to generate content for each section, and stay within the specified character limits.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. Use the description to generate content for each section, and stay within the specified character limits.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
     for section_name, content in template_structure:
         max_chars = len(content)
         prompt += f"Section {section_name}: Content (max {max_chars} characters)\n"
 
-    prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'."
+    prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'.\n" + anthropic.AI_PROMPT
 
     return prompt, job_id
 
 def generate_content_with_retry(prompt, job_id, template_structure, retries=3, delay=5):
     for i in range(retries):
         try:
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=1000,
+            response = client.completion(
+                prompt=prompt,
+                model="claude-2",
+                max_tokens_to_sample=1000,
                 temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
             )
             
-            content = message.get('completion', "No content generated.")
+            content = response.get('completion', "No content generated.")
 
             content_clean = clean_text(content)
-            st.write("Generated content:")
-            st.write(content_clean)
             
             sections = {}
             current_section = None
@@ -164,7 +162,7 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
             return sections
         
         except anthropic.APIError as e:
-            if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+            if 'overloaded' in str(e).lower() and i < retries - 1:
                 st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                 time.sleep(delay)
             else:
@@ -172,29 +170,24 @@ def generate_content_with_retry(prompt, job_id, template_structure, retries=3, d
                 return None
 
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    social_prompts = {
-        "facebook": f"Generate a Facebook post based on this content:\n{main_content}",
-        "linkedin": f"Generate a LinkedIn post based on this content:\n{main_content}",
-        "instagram": f"Generate an Instagram post based on this content:\n{main_content}"
-    }
     generated_content = {}
     for channel in selected_channels:
         for i in range(retries):
             try:
-                prompt = social_prompts[channel]
-                message = client.messages.create(
-                    model="claude-3-5-sonnet-20240620",
-                    max_tokens=500,
+                prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
+                response = client.completion(
+                    prompt=prompt,
+                    model="claude-2",
+                    max_tokens_to_sample=500,
                     temperature=0.7,
-                    messages=[{"role": "user", "content": prompt}]
                 )
                 
-                content = message.get('completion', "No content generated.")
+                content = response.get('completion', "No content generated.")
                 generated_content[channel] = content
                 break
             
             except anthropic.APIError as e:
-                if e.error.get('type') == 'overloaded_error' and i < retries - 1:
+                if 'overloaded' in str(e).lower() and i < retries - 1:
                     st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                     time.sleep(delay)
                 else:
@@ -237,7 +230,7 @@ def main():
     st.markdown("---")
 
     if 'sheet_data' not in st.session_state:
-        st.session_state['sheet_data'] = load_google_sheet('YOUR_GOOGLE_SHEET_ID')
+        st.session_state['sheet_data'] = load_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8')
     if 'examples_data' not in st.session_state:
         st.session_state['examples_data'] = load_examples()
 
@@ -272,7 +265,7 @@ def main():
             if generated_content:
                 generated_contents.append((job_id, generated_content))
                 
-                update_google_sheet('YOUR_GOOGLE_SHEET_ID', job_id, generated_content)
+                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
 
         st.session_state['generated_contents'] = generated_contents
         
