@@ -79,12 +79,15 @@ def extract_template_structure(selected_template, examples_data):
         if col in example_row.columns:
             text_element = example_row[col].values[0]
             if pd.notna(text_element):
-                template_structure.append((col, text_element))
+                # Cast the length to an integer to avoid type errors later
+                template_structure.append((col, int(len(text_element))))
 
     return template_structure
 
 # Enforce character limit for content sections
 def enforce_character_limit(content, max_chars):
+    # Ensure max_chars is treated as an integer
+    max_chars = int(max_chars)
     relaxed_limit = max_chars + 20  # Relax the limit by 20 characters for flexibility
     if len(content) > relaxed_limit:
         truncated_content = content[:relaxed_limit].rsplit(' ', 1)[0]
