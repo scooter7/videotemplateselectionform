@@ -136,27 +136,34 @@ def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Each section should start with 'Section [Section Name]:' followed by the content. For umbrella sections (e.g., Text01), generate a main idea. For subsections (e.g., Text01-1), generate content that expands on the umbrella section. Use the description to generate content, and stay within the specified character limits.\n\n"
+    prompt = f"{anthropic.HUMAN_PROMPT}Using the following description, generate content for each section as specified. Follow the umbrella methodology: for each main section (e.g., Text01), provide a concise main idea. For each corresponding subsection (e.g., Text01-1), provide a verbatim repetition or slight rephrasing of the main section to expand upon it. Ensure that subsections directly relate to their main sections.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
+
+    # Provide examples in the prompt
+    prompt += "Example of expected output format:\n"
+    prompt += "Section Text01: PartsSource Moves\n"
+    prompt += "Section Text01-1: PartsSource Moves\n"
+    prompt += "Section Text02: Relocating HQ to Hudson, Ohio: 70,000 sq ft\n"
+    prompt += "Section Text02-1: Relocating HQ to Hudson, Ohio\n\n"
 
     umbrella_sections = {}
     for section_name, content in template_structure:
         max_chars = len(content)
         if '-' not in section_name:
             # This is an umbrella section
-            prompt += f"Section {section_name}: Generate a main idea based on the description. Max {max_chars} characters.\n"
+            prompt += f"Section {section_name}: [Main idea] (max {max_chars} characters)\n"
             umbrella_sections[section_name] = []
         else:
             # This is a subsection
             main_section = section_name.split('-')[0]
             if main_section in umbrella_sections:
-                prompt += f"Section {section_name}: Generate a subsection of '{main_section}' that focuses on a specific aspect. Max {max_chars} characters.\n"
+                prompt += f"Section {section_name}: [Verbatim repetition or slight rephrasing of {main_section}] (max {max_chars} characters)\n"
                 umbrella_sections[main_section].append(section_name)
             else:
                 # Handle cases where the main section might be missing
-                prompt += f"Section {section_name}: Generate content. Max {max_chars} characters.\n"
+                prompt += f"Section {section_name}: [Content related to {main_section}] (max {max_chars} characters)\n"
 
-    prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'.\n" + anthropic.AI_PROMPT
+    prompt += "\nPlease provide the content for each section as specified, starting each with 'Section [Section Name]:'. Remember to follow the umbrella methodology as in the examples provided.\n" + anthropic.AI_PROMPT
 
     return prompt
 
@@ -188,7 +195,7 @@ def generate_content_with_retry(prompt, retries=3, delay=5):
                     current_section = section_name
                     sections[current_section] = section_content
                 elif current_section:
-                    sections[current_section] += '\n' + line.strip()
+                    sections[current_section] += ' ' + line.strip()
 
             for section in sections:
                 sections[section] = sections[section].strip()
