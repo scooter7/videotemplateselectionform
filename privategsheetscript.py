@@ -255,13 +255,21 @@ def update_google_sheet(sheet_id, job_id, generated_content):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        cell = sheet.find(job_id, in_column=2)
+        # Try to find the row with the job_id
+        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
+        
         if not cell:
-            st.warning(f"Job ID {job_id} not found in the sheet.")
-            return
+            # Job ID not found, so create a new row
+            st.warning(f"Job ID {job_id} not found. Creating a new row for it.")
+            # Find the first empty row
+            last_row = len(sheet.get_all_values()) + 1
+            sheet.update_cell(last_row, 2, job_id)  # Add Job ID in column B
+            row = last_row
+        else:
+            # If found, update the existing row
+            row = cell.row
 
-        row = cell.row
-
+        # Retrieve headers to map sections to columns
         headers = sheet.row_values(1)
         header_to_col = {}
         header_counts = defaultdict(int)
@@ -271,16 +279,19 @@ def update_google_sheet(sheet_id, job_id, generated_content):
                 new_h = f"{h}_{count}"
             else:
                 new_h = h
-            header_counts[h] +=1
-            header_to_col[new_h] = idx +1  # 1-based indexing
+            header_counts[h] += 1
+            header_to_col[new_h] = idx + 1  # 1-based indexing
 
+        # Update or insert the content for each section
         for section, content in generated_content.items():
             if section in header_to_col:
                 col = header_to_col[section]
                 sheet.update_cell(row, col, content)
             else:
                 st.warning(f"Section {section} not found in sheet headers.")
+        
         st.success(f"Updated Google Sheet for Job ID {job_id}")
+
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
 
