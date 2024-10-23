@@ -399,9 +399,11 @@ def main():
                 st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
                 continue
 
+            # Log the generated prompt for debugging
+            st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
+
             generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
-                # Log successful content generation
                 st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id}")
                 
                 # Divide content for subsections if needed
@@ -439,7 +441,7 @@ def main():
                 # Update the response sheet with generated content (create row if Job ID is not found)
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content, idx + 1)
             else:
-                st.warning(f"No content generated for row {idx + 1}, Job ID = {job_id}")
+                st.error(f"No content generated for row {idx + 1}, Job ID = {job_id}")
 
         st.session_state['generated_contents'] = generated_contents
 
