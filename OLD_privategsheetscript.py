@@ -377,6 +377,9 @@ def main():
             selected_template = row[selected_template_col]
             topic_description = row[topic_description_col]
 
+            # Log the row details for debugging
+            st.write(f"Processing row {idx + 1}: Job ID = {job_id}, Selected Template = {selected_template}, Topic Description = {topic_description}")
+
             if not (job_id and selected_template and topic_description):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
@@ -393,10 +396,16 @@ def main():
             # Build prompt and generate content
             prompt = build_template_prompt(topic_description, template_structure)
             if not prompt:
+                st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
                 continue
+
+            # Log the generated prompt for debugging
+            st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
 
             generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
+                st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id}")
+                
                 # Divide content for subsections if needed
                 full_content = generated_content.copy()
                 for main_section in full_content:
@@ -431,6 +440,8 @@ def main():
 
                 # Update the response sheet with generated content (create row if Job ID is not found)
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content, idx + 1)
+            else:
+                st.error(f"No content generated for row {idx + 1}, Job ID = {job_id}")
 
         st.session_state['generated_contents'] = generated_contents
 
