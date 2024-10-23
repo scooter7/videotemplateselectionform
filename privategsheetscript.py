@@ -252,10 +252,11 @@ def get_column_name(df, name):
     else:
         return None
 
-def update_google_sheet(sheet_id, job_id, generated_content):
+def update_google_sheet(sheet_id, job_id, generated_content, source_row):
     """
     Updates the Google Sheet with the generated content.
     If the Job ID is not found, it creates a new row and populates it.
+    Ensures that Job ID is placed in the correct row based on the source_row.
     """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
@@ -270,19 +271,17 @@ def update_google_sheet(sheet_id, job_id, generated_content):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        # Try to find the row with the job_id
+        # Check if the job_id already exists
         cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
 
         if not cell:
-            # Job ID not found, so create a new row
-            st.warning(f"Job ID {job_id} not found. Creating a new row for it.")
-            # Find the first empty row
-            last_row = len(sheet.get_all_values()) + 1
-            sheet.update_cell(last_row, 2, job_id)  # Add Job ID in column B
-            row = last_row
+            # Job ID not found, place it in the correct row based on the source_row
+            st.warning(f"Job ID {job_id} not found. Placing it in the correct row based on source.")
+            target_row = source_row + 1  # Match the row from the source Google Sheet
+            sheet.update_cell(target_row, 2, job_id)  # Add Job ID in column B
         else:
             # If found, update the existing row
-            row = cell.row
+            target_row = cell.row
 
         # Retrieve headers to map sections to columns
         headers = sheet.row_values(1)
@@ -301,15 +300,14 @@ def update_google_sheet(sheet_id, job_id, generated_content):
         for section, content in generated_content.items():
             if section in header_to_col:
                 col = header_to_col[section]
-                sheet.update_cell(row, col, content)
+                sheet.update_cell(target_row, col, content)
             else:
                 st.warning(f"Section {section} not found in sheet headers.")
 
-        st.success(f"Updated Google Sheet for Job ID {job_id}")
+        st.success(f"Updated Google Sheet for Job ID {job_id} in row {target_row}")
 
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
-
         
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     """
@@ -340,7 +338,6 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
         else:
             generated_content[channel] = ""
     return generated_content
-
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
@@ -433,7 +430,7 @@ def main():
                 generated_contents.append((job_id, generated_content))
 
                 # Update the response sheet with generated content (create row if Job ID is not found)
-                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
+                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content, idx + 1)
 
         st.session_state['generated_contents'] = generated_contents
 
@@ -447,4 +444,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
