@@ -242,6 +242,10 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
     return subsections_content
 
 def update_google_sheet(sheet_id, job_id, generated_content):
+    """
+    Updates the Google Sheet with the generated content.
+    If the Job ID is not found, it creates a new row and populates it.
+    """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -257,7 +261,7 @@ def update_google_sheet(sheet_id, job_id, generated_content):
 
         # Try to find the row with the job_id
         cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
-        
+
         if not cell:
             # Job ID not found, so create a new row
             st.warning(f"Job ID {job_id} not found. Creating a new row for it.")
@@ -289,20 +293,17 @@ def update_google_sheet(sheet_id, job_id, generated_content):
                 sheet.update_cell(row, col, content)
             else:
                 st.warning(f"Section {section} not found in sheet headers.")
-        
+
         st.success(f"Updated Google Sheet for Job ID {job_id}")
 
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
 
-def get_column_name(df, name):
-    cols = [col for col in df.columns if col == name or col.startswith(name + '_')]
-    if cols:
-        return cols[0]
-    else:
-        return None
-
+        
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    """
+    Generate content for social media channels with retry logic in case of API overload.
+    """
     generated_content = {}
     for channel in selected_channels:
         for i in range(retries):
@@ -328,6 +329,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
         else:
             generated_content[channel] = ""
     return generated_content
+
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
@@ -361,6 +363,7 @@ def main():
             st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description') not found in the sheet.")
             return
 
+        # Iterate through all rows in the sheet
         for idx, row in sheet_data.iterrows():
             job_id = row[job_id_col]
             selected_template = row[selected_template_col]
@@ -418,7 +421,7 @@ def main():
 
                 generated_contents.append((job_id, generated_content))
 
-                # Update the response sheet with generated content
+                # Update the response sheet with generated content (create row if Job ID is not found)
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
 
         st.session_state['generated_contents'] = generated_contents
@@ -433,3 +436,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
