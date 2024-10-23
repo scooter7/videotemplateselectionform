@@ -241,7 +241,23 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
 
     return subsections_content
 
-def update_google_sheet(sheet_id, job_id, generated_content):
+def get_column_name(df, name):
+    """
+    Finds a column name in the dataframe that either matches exactly
+    or starts with the specified name (useful for columns like 'Job ID').
+    """
+    cols = [col for col in df.columns if col == name or col.startswith(name + '_')]
+    if cols:
+        return cols[0]
+    else:
+        return None
+
+def update_google_sheet(sheet_id, job_id, generated_content, source_row):
+    """
+    Updates the Google Sheet with the generated content.
+    If the Job ID is not found, it creates a new row and populates it.
+    Ensures that Job ID is placed in the correct row based on the source_row.
+    """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -255,13 +271,19 @@ def update_google_sheet(sheet_id, job_id, generated_content):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        cell = sheet.find(job_id, in_column=2)
+        # Check if the job_id already exists
+        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
+
         if not cell:
-            st.warning(f"Job ID {job_id} not found in the sheet.")
-            return
+            # Job ID not found, place it in the correct row based on the source_row
+            st.warning(f"Job ID {job_id} not found. Placing it in the correct row based on source.")
+            target_row = source_row + 1  # Match the row from the source Google Sheet
+            sheet.update_cell(target_row, 2, job_id)  # Add Job ID in column B
+        else:
+            # If found, update the existing row
+            target_row = cell.row
 
-        row = cell.row
-
+        # Retrieve headers to map sections to columns
         headers = sheet.row_values(1)
         header_to_col = {}
         header_counts = defaultdict(int)
@@ -271,27 +293,26 @@ def update_google_sheet(sheet_id, job_id, generated_content):
                 new_h = f"{h}_{count}"
             else:
                 new_h = h
-            header_counts[h] +=1
-            header_to_col[new_h] = idx +1  # 1-based indexing
+            header_counts[h] += 1
+            header_to_col[new_h] = idx + 1  # 1-based indexing
 
+        # Update or insert the content for each section
         for section, content in generated_content.items():
             if section in header_to_col:
                 col = header_to_col[section]
-                sheet.update_cell(row, col, content)
+                sheet.update_cell(target_row, col, content)
             else:
                 st.warning(f"Section {section} not found in sheet headers.")
-        st.success(f"Updated Google Sheet for Job ID {job_id}")
+
+        st.success(f"Updated Google Sheet for Job ID {job_id} in row {target_row}")
+
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
-
-def get_column_name(df, name):
-    cols = [col for col in df.columns if col == name or col.startswith(name + '_')]
-    if cols:
-        return cols[0]
-    else:
-        return None
-
+        
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    """
+    Generate content for social media channels with retry logic in case of API overload.
+    """
     generated_content = {}
     for channel in selected_channels:
         for i in range(retries):
@@ -350,6 +371,7 @@ def main():
             st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description') not found in the sheet.")
             return
 
+        # Iterate through all rows in the sheet
         for idx, row in sheet_data.iterrows():
             job_id = row[job_id_col]
             selected_template = row[selected_template_col]
@@ -358,50 +380,39 @@ def main():
             if not (job_id and selected_template and topic_description):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
+
+            # Extract template structure
             template_structure = extract_template_structure(selected_template, examples_data)
             if template_structure is None:
-                st.warning(f"Template {selected_template} not found in examples data.")
+                st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
                 continue
 
             # Build a mapping of section names to character limits
             section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
 
+            # Build prompt and generate content
             prompt = build_template_prompt(topic_description, template_structure)
-
             if not prompt:
                 continue
 
             generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
-                # Now, divide main sections' content among subsections
+                # Divide content for subsections if needed
                 full_content = generated_content.copy()
                 for main_section in full_content:
-                    # Find subsections
                     subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
                     if subsections:
                         main_content = generated_content[main_section]
-                        # Build subsection character limits
                         subsection_character_limits = {s: section_character_limits[s] for s in subsections}
                         divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
-                        # Add subsections to generated_content
                         generated_content.update(divided_contents)
 
-                # Include any sections that were not main sections or subsections (e.g., CTA)
+                # Ensure every section gets content even if empty
                 for section_name, _, max_chars in template_structure:
                     if section_name not in generated_content:
-                        if 'CTA' in section_name:
-                            # Generate CTA content
-                            cta_prompt = f"{anthropic.HUMAN_PROMPT}Based on the following description, generate a Call To Action (CTA) that encourages the audience to take the next step. Keep it concise and engaging.\n\nDescription:\n{topic_description}\n\n{anthropic.AI_PROMPT}"
-                            cta_content = generate_content_with_retry(cta_prompt, {section_name: max_chars})
-                            if cta_content and section_name in cta_content:
-                                generated_content[section_name] = cta_content[section_name]
-                            else:
-                                generated_content[section_name] = "Learn more on our website."
-                        else:
-                            # Handle other sections if necessary
-                            generated_content[section_name] = ""
+                        generated_content[section_name] = ""  # Ensure all sections are populated, even if empty
 
-                # Generate social media posts for LinkedIn, Facebook, and Instagram
+                # Generate social media content
                 social_channels = ['LinkedIn', 'Facebook', 'Instagram']
                 combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
                 social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
@@ -418,8 +429,8 @@ def main():
 
                 generated_contents.append((job_id, generated_content))
 
-                # Update the response sheet with generated content
-                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content)
+                # Update the response sheet with generated content (create row if Job ID is not found)
+                update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content, idx + 1)
 
         st.session_state['generated_contents'] = generated_contents
 
