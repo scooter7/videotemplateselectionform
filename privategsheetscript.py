@@ -358,50 +358,39 @@ def main():
             if not (job_id and selected_template and topic_description):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
+
+            # Extract template structure
             template_structure = extract_template_structure(selected_template, examples_data)
             if template_structure is None:
-                st.warning(f"Template {selected_template} not found in examples data.")
+                st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
                 continue
 
             # Build a mapping of section names to character limits
             section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
 
+            # Build prompt and generate content
             prompt = build_template_prompt(topic_description, template_structure)
-
             if not prompt:
                 continue
 
             generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
-                # Now, divide main sections' content among subsections
+                # Divide content for subsections if needed
                 full_content = generated_content.copy()
                 for main_section in full_content:
-                    # Find subsections
                     subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
                     if subsections:
                         main_content = generated_content[main_section]
-                        # Build subsection character limits
                         subsection_character_limits = {s: section_character_limits[s] for s in subsections}
                         divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
-                        # Add subsections to generated_content
                         generated_content.update(divided_contents)
 
-                # Include any sections that were not main sections or subsections (e.g., CTA)
+                # Ensure every section gets content even if empty
                 for section_name, _, max_chars in template_structure:
                     if section_name not in generated_content:
-                        if 'CTA' in section_name:
-                            # Generate CTA content
-                            cta_prompt = f"{anthropic.HUMAN_PROMPT}Based on the following description, generate a Call To Action (CTA) that encourages the audience to take the next step. Keep it concise and engaging.\n\nDescription:\n{topic_description}\n\n{anthropic.AI_PROMPT}"
-                            cta_content = generate_content_with_retry(cta_prompt, {section_name: max_chars})
-                            if cta_content and section_name in cta_content:
-                                generated_content[section_name] = cta_content[section_name]
-                            else:
-                                generated_content[section_name] = "Learn more on our website."
-                        else:
-                            # Handle other sections if necessary
-                            generated_content[section_name] = ""
+                        generated_content[section_name] = ""  # Ensure all sections are populated, even if empty
 
-                # Generate social media posts for LinkedIn, Facebook, and Instagram
+                # Generate social media content
                 social_channels = ['LinkedIn', 'Facebook', 'Instagram']
                 combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
                 social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
