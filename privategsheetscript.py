@@ -241,6 +241,17 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
 
     return subsections_content
 
+def get_column_name(df, name):
+    """
+    Finds a column name in the dataframe that either matches exactly
+    or starts with the specified name (useful for columns like 'Job ID').
+    """
+    cols = [col for col in df.columns if col == name or col.startswith(name + '_')]
+    if cols:
+        return cols[0]
+    else:
+        return None
+
 def update_google_sheet(sheet_id, job_id, generated_content):
     """
     Updates the Google Sheet with the generated content.
