@@ -220,6 +220,41 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 st.error(f"Error generating content: {e}")
                 return None
 
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    """
+    Generate content for social media channels with retry logic in case of API overload.
+    """
+    generated_content = {}
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                prompt = f"Generate a {channel.capitalize()} post based on this content:\n{main_content}\n"
+                response = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=500,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+
+                # Extract the content from the response
+                if response.content and response.content[0].type == 'text':
+                    content = response.content[0].text
+                    generated_content[channel] = content.strip()
+                else:
+                    st.error(f"No content generated for {channel}.")
+                    generated_content[channel] = ""
+                break
+
+            except Exception as e:
+                if 'overloaded' in str(e).lower() and i < retries - 1:
+                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                    time.sleep(delay)
+                else:
+                    st.error(f"Error generating {channel} content: {e}")
+                    generated_content[channel] = ""
+    return generated_content
+
 def divide_content_verbatim(main_content, subsections, section_character_limits):
     words = main_content.split()
     total_words = len(words)
