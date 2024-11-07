@@ -240,15 +240,19 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     ]
                 )
 
-                # Extract the content from the response
-                content = response.content
+                # Ensure content is a single string by joining if it's a list
+                if isinstance(response.content, list):
+                    content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
+                else:
+                    content = response.content
+
                 if not content:
                     st.error(f"No content generated for {channel}.")
                     generated_content[channel] = ""
-                    break
+                else:
+                    generated_content[channel] = content.strip()
 
-                generated_content[channel] = content.strip()
-                break
+                break  # Exit retry loop if content generation is successful
 
             except Exception as e:
                 if 'overloaded' in str(e).lower() and i < retries - 1:
