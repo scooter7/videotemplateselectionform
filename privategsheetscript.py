@@ -292,6 +292,11 @@ def get_column_name(df, name):
     return cols[0] if cols else None
 
 def update_google_sheet(sheet_id, job_id, generated_content, source_row):
+    """
+    Updates the Google Sheet with the generated content.
+    If the Job ID is not found, it creates a new row and populates it.
+    Ensures that Job ID is placed in the correct row based on the source_row.
+    """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -305,7 +310,7 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        cell = sheet.find(job_id, in_column=2)  
+        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
 
         if not cell:
             st.warning(f"Job ID {job_id} not found. Placing it in the correct row based on source.")
@@ -314,24 +319,38 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
         else:
             target_row = cell.row
 
-        headers = sheet.row_values(1)
-        header_to_col = {}
-        header_counts = defaultdict(int)
-        for idx, h in enumerate(headers):
-            count = header_counts[h]
-            if count > 0:
-                new_h = f"{h}_{count}"
-            else:
-                new_h = h
-            header_counts[h] += 1
-            header_to_col[new_h] = idx + 1
+        # Hard-coded column mapping based on the provided mapping
+        column_mapping = {
+            'Text01': 'I', 'Text01-1': 'J', 'Text01-2': 'K', 'Text01-3': 'L', 'Text01-4': 'M',
+            '01BG-Theme-Text': 'N',
+            'Text02': 'O', 'Text02-1': 'P', 'Text02-2': 'Q', 'Text02-3': 'R', 'Text02-4': 'S',
+            '02BG-Theme-Text': 'T',
+            'Text03': 'U', 'Text03-1': 'V', 'Text03-2': 'W', 'Text03-3': 'X', 'Text03-4': 'Y',
+            '03BG-Theme-Text': 'Z',
+            'Text04': 'AA', 'Text04-1': 'AB', 'Text04-2': 'AC', 'Text04-3': 'AD', 'Text04-4': 'AE',
+            '04BG-Theme-Text': 'AF',
+            'Text05': 'AG', 'Text05-1': 'AH', 'Text05-2': 'AI', 'Text05-3': 'AJ', 'Text05-4': 'AK',
+            '05BG-Theme-Text': 'AL',
+            'Text06': 'AM', 'Text06-1': 'AN', 'Text06-2': 'AO', 'Text06-3': 'AP', 'Text06-4': 'AQ',
+            '06BG-Theme-Text': 'AR',
+            'Text07': 'AS', 'Text07-1': 'AT', 'Text07-2': 'AU', 'Text07-3': 'AV', 'Text07-4': 'AW',
+            '07BG-Theme-Text': 'AX',
+            'Text08': 'AY', 'Text08-1': 'AZ', 'Text08-2': 'BA', 'Text08-3': 'BB', 'Text08-4': 'BC',
+            '08BG-Theme-Text': 'BD',
+            'Text09': 'BE', 'Text09-1': 'BF', 'Text09-2': 'BG', 'Text09-3': 'BH', 'Text09-4': 'BI',
+            '09BG-Theme-Text': 'BJ',
+            'Text10': 'BK', 'Text10-1': 'BL', 'Text10-2': 'BM', 'Text10-3': 'BN', 'Text10-4': 'BO',
+            '10BG-Theme-Text': 'BP',
+            'CTA-Text': 'BQ', 'CTA-Text-1': 'BR', 'CTA-Text-2': 'BS', 'Tagline-Text': 'BT'
+        }
 
         for section, content in generated_content.items():
-            if section in header_to_col:
-                col = header_to_col[section]
-                sheet.update_cell(target_row, col, content)
+            if section in column_mapping:
+                col = column_mapping[section]
+                col_index = gspread.utils.a1_to_rowcol(col + str(1))[1]  # Convert A1 notation to column index
+                sheet.update_cell(target_row, col_index, content)
             else:
-                st.warning(f"Section {section} not found in sheet headers.")
+                st.warning(f"Section {section} not found in the hard-coded column mapping.")
 
         st.success(f"Updated Google Sheet for Job ID {job_id} in row {target_row}")
 
