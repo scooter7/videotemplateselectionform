@@ -78,7 +78,7 @@ def load_google_sheet(sheet_id):
             else:
                 new_h = h
             new_headers.append(new_h)
-            header_counts[h] +=1
+            header_counts[h] += 1
         rows = data[1:]
         df = pd.DataFrame(rows, columns=new_headers)
         return df
@@ -104,8 +104,8 @@ def clean_text(text):
         u"\U0001F300-\U0001F5FF"  
         u"\U0001F680-\U0001F6FF"  
         u"\U0001F1E0-\U0001F1FF"  
-        u"\U00002702-\U000027B0"
-        u"\U000024C2-\U0001F251"
+        u"\u2702-\u27B0"
+        u"\u24C2-\u1F251"
         "]+", flags=re.UNICODE
     )
     return emoji_pattern.sub(r'', text)
@@ -162,7 +162,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
         try:
             response = client.completions.create(
                 prompt=prompt,
-                model="claude-2",
+                model="claude-3.5-sonnet-20240620",
                 max_tokens_to_sample=2000,
                 temperature=0.1,  # Changed temperature to 0.1
             )
@@ -317,36 +317,6 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
 
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
-        
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    """
-    Generate content for social media channels with retry logic in case of API overload.
-    """
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = f"{anthropic.HUMAN_PROMPT}Generate a {channel.capitalize()} post based on this content:\n{main_content}\n\n{anthropic.AI_PROMPT}"
-                response = client.completions.create(
-                    prompt=prompt,
-                    model="claude-2",
-                    max_tokens_to_sample=500,
-                    temperature=0.1,  # Changed temperature to 0.1
-                )
-
-                content = response.completion if response.completion else "No content generated."
-                generated_content[channel] = content.strip()
-                break
-
-            except anthropic.ApiException as e:
-                if 'overloaded' in str(e).lower() and i < retries - 1:
-                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                    time.sleep(delay)
-                else:
-                    st.error(f"Error generating {channel} content: {e}")
-        else:
-            generated_content[channel] = ""
-    return generated_content
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
