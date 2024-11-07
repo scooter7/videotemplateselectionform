@@ -98,14 +98,15 @@ def load_examples():
 
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
+    # Adjusted regex pattern to use valid Unicode character ranges
     emoji_pattern = re.compile(
         "["
-        u"\U0001F600-\U0001F64F"  
-        u"\U0001F300-\U0001F5FF"  
-        u"\U0001F680-\U0001F6FF"  
-        u"\U0001F1E0-\U0001F1FF"  
-        u"\u2702-\u27B0"
-        u"\u24C2-\u1F251"
+        u"\U0001F600-\U0001F64F"  # Emoticons
+        u"\U0001F300-\U0001F5FF"  # Symbols & Pictographs
+        u"\U0001F680-\U0001F6FF"  # Transport & Map Symbols
+        u"\U0001F1E0-\U0001F1FF"  # Flags (iOS)
+        u"\u2600-\u26FF"          # Miscellaneous Symbols
+        u"\u2700-\u27BF"          # Dingbats
         "]+", flags=re.UNICODE
     )
     return emoji_pattern.sub(r'', text)
