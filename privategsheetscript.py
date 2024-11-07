@@ -111,47 +111,34 @@ def clean_text(text):
     return emoji_pattern.sub(r'', text)
 
 def extract_template_structure(selected_template, examples_data):
-    if "template_SH_" in selected_template:
-        try:
-            template_number = int(selected_template.split('_')[-1])
-            template_number_str = f"{template_number:02d}"
-        except ValueError:
-            template_number_str = "01"
-    else:
-        template_number_str = "01"
-
-    example_row = examples_data[examples_data['Template'] == f'template_SH_{template_number_str}']
+    example_row = examples_data[examples_data['Template'] == selected_template]
     if example_row.empty:
         return None
 
     template_structure = []
     for col in example_row.columns:
-        if col != 'Template':
+        if col != 'Template' and pd.notna(example_row[col].values[0]):
             text_element = example_row[col].values[0]
-            if pd.notna(text_element):
-                max_chars = len(str(text_element))
-                template_structure.append((col, text_element, max_chars))
+            max_chars = len(str(text_element))
+            template_structure.append((col, text_element, max_chars))
     return template_structure
 
 def ensure_all_sections_populated(generated_content, template_structure):
     for section_name, _, _ in template_structure:
         if section_name not in generated_content:
-            generated_content[section_name] = ""  
+            generated_content[section_name] = ""
     return generated_content
 
 def build_template_prompt(topic_description, template_structure):
     if not (topic_description and template_structure):
         return None
 
-    prompt = f"Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Do not generate content for subsections. Ensure that the content for each section does not exceed the specified character limit. Do not include any mention of character counts or limits in your output.\n\n"
+    prompt = f"Using the following description, generate content for each main section as specified. Each main section should start with 'Section [Section Name]:' followed by the content. Ensure that the content for each section does not exceed the specified character limit.\n\n"
     prompt += f"Description:\n{topic_description}\n\n"
 
     for section_name, _, max_chars in template_structure:
-        if '-' not in section_name:
-            prompt += f"Section {section_name}: (max {max_chars} characters)\n"
+        prompt += f"Section {section_name}: (max {max_chars} characters)\n"
 
-    prompt += "\nPlease provide the content for each main section as specified, starting each with 'Section [Section Name]:'. Do not include subsections. Do not include any additional text or explanations."
-    
     return prompt
 
 def generate_content_with_retry(prompt, section_character_limits, retries=3, delay=5):
@@ -165,19 +152,15 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 ]
             )
 
-            st.write(f"API response for current row: {response}")
-
             if isinstance(response.content, list):
                 content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
             else:
                 content = response.content
 
             if not content:
-                st.error("Content generation failed. The response format may be unexpected.")
                 continue
 
             content_clean = clean_text(content)
-
             sections = {}
             current_section = None
             for line in content_clean.split('\n'):
@@ -197,24 +180,16 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
 
             for section in sections:
                 limit = section_character_limits.get(section, None)
-                if limit:
-                    content = sections[section]
-                    if len(content) > limit:
-                        trimmed_content = content[:limit].rsplit(' ', 1)[0]
-                        if not trimmed_content:
-                            trimmed_content = content[:limit]
-                        sections[section] = trimmed_content.strip()
-                else:
-                    sections[section] = sections[section].strip()
+                if limit and len(sections[section]) > limit:
+                    trimmed_content = sections[section][:limit].rsplit(' ', 1)[0] or sections[section][:limit]
+                    sections[section] = trimmed_content.strip()
 
             return sections
 
         except Exception as e:
             if 'overloaded' in str(e).lower() and i < retries - 1:
-                st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                 time.sleep(delay)
             else:
-                st.error(f"Error generating content: {e}")
                 return None
 
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
@@ -236,19 +211,14 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                 else:
                     content = response.content
 
-                if not content:
-                    st.error(f"No content generated for {channel}.")
-                    generated_content[channel] = ""
-                else:
+                if content:
                     generated_content[channel] = content.strip()
                 break
 
             except Exception as e:
                 if 'overloaded' in str(e).lower() and i < retries - 1:
-                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                     time.sleep(delay)
                 else:
-                    st.error(f"Error generating {channel} content: {e}")
                     generated_content[channel] = ""
     return generated_content
 
@@ -292,11 +262,6 @@ def get_column_name(df, name):
     return cols[0] if cols else None
 
 def update_google_sheet(sheet_id, job_id, generated_content, source_row):
-    """
-    Updates the Google Sheet with the generated content.
-    If the Job ID is not found, it creates a new row and populates it.
-    Ensures that Job ID is placed in the correct row based on the source_row.
-    """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -310,16 +275,14 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
+        cell =         sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
 
         if not cell:
-            st.warning(f"Job ID {job_id} not found. Placing it in the correct row based on source.")
             target_row = source_row + 1
             sheet.update_cell(target_row, 2, job_id)
         else:
             target_row = cell.row
 
-        # Hard-coded column mapping based on the provided mapping
         column_mapping = {
             'Text01': 'I', 'Text01-1': 'J', 'Text01-2': 'K', 'Text01-3': 'L', 'Text01-4': 'M',
             '01BG-Theme-Text': 'N',
@@ -459,3 +422,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
