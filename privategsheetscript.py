@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
-client = anthropic.Client(api_key=anthropic_api_key)
+client = anthropic.Anthropic(api_key=anthropic_api_key)
 
 st.markdown(
     """
@@ -160,14 +160,15 @@ def build_template_prompt(topic_description, template_structure):
 def generate_content_with_retry(prompt, section_character_limits, retries=3, delay=5):
     for i in range(retries):
         try:
-            response = client.completions.create(
-                prompt=prompt,
-                model="claude-3-5-sonnet-20240620",
-                max_tokens_to_sample=2000,
-                temperature=0.1,  # Set temperature to 0.1 for controlled output
+            response = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
             )
 
-            content = response.get('completion', "No content generated.")
+            content = response['completion'] if 'completion' in response else "No content generated."
 
             content_clean = clean_text(content)
 
