@@ -155,7 +155,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 prompt=prompt,
                 model="claude-2",
                 max_tokens_to_sample=2000,
-                temperature=0.1,  # Changed temperature to 0.1
+                temperature=0.1
             )
 
             content = response.completion if response.completion else "No content generated."
@@ -179,16 +179,16 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 elif current_section:
                     sections[current_section] += ' ' + line.strip()
 
-            # Trim content to character limits without cutting off mid-word
-            for section in sections:
-                limit = section_character_limits.get(section, None)
+            for section, _, _ in section_character_limits:
+                if section not in sections:
+                    sections[section] = ""
+
+            for section, limit in section_character_limits.items():
                 if limit:
                     content = sections[section]
                     if len(content) > limit:
-                        # Trim without cutting off mid-word
                         trimmed_content = content[:limit].rsplit(' ', 1)[0]
                         if not trimmed_content:
-                            # If trimming removes all content, keep the original up to limit
                             trimmed_content = content[:limit]
                         sections[section] = trimmed_content.strip()
                 else:
@@ -343,7 +343,6 @@ def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    # Load data from the request sheet (input data)
     if 'sheet_data' not in st.session_state:
         st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     if 'examples_data' not in st.session_state:
@@ -371,55 +370,38 @@ def main():
             st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description') not found in the sheet.")
             return
 
-        # Iterate through all rows in the sheet
         for idx, row in sheet_data.iterrows():
             job_id = row[job_id_col]
             selected_template = row[selected_template_col]
             topic_description = row[topic_description_col]
 
-            # Log the row details for debugging
             st.write(f"Processing row {idx + 1}: Job ID = {job_id}, Selected Template = {selected_template}, Topic Description = {topic_description}")
 
             if not (job_id and selected_template and topic_description):
                 st.warning(f"Row {idx + 1} is missing Job ID, Selected-Template, or Topic-Description. Skipping this row.")
                 continue
 
-            # Extract template structure
             template_structure = extract_template_structure(selected_template, examples_data)
             if template_structure is None:
                 st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
                 continue
 
-            # Build a mapping of section names to character limits
-            section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
+            section_character_limits = [(name, max_chars) for name, _, max_chars in template_structure]
 
-            # Build prompt and generate content
             prompt = build_template_prompt(topic_description, template_structure)
             if not prompt:
                 st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
                 continue
 
-            # Log the generated prompt for debugging
             st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
 
             generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
                 st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id}")
-                
-                # Divide content for subsections if needed
-                full_content = generated_content.copy()
-                for main_section in full_content:
-                    subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
-                    if subsections:
-                        main_content = generated_content[main_section]
-                        subsection_character_limits = {s: section_character_limits[s] for s in subsections}
-                        divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
-                        generated_content.update(divided_contents)
 
-                # Ensure every section gets content even if empty
-                for section_name, _, max_chars in template_structure:
+                for section_name, _, _ in template_structure:
                     if section_name not in generated_content:
-                        generated_content[section_name] = ""  # Ensure all sections are populated, even if empty
+                        generated_content[section_name] = ""
 
                 # Generate social media content
                 social_channels = ['LinkedIn', 'Facebook', 'Instagram']
@@ -438,7 +420,6 @@ def main():
 
                 generated_contents.append((job_id, generated_content))
 
-                # Update the response sheet with generated content (create row if Job ID is not found)
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content, idx + 1)
             else:
                 st.error(f"No content generated for row {idx + 1}, Job ID = {job_id}")
