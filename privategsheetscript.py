@@ -162,7 +162,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
         try:
             response = client.completions.create(
                 prompt=prompt,
-                model="claude-3.5-sonnet-20240620",
+                model="claude-3-5-sonnet-20240620",
                 max_tokens_to_sample=2000,
                 temperature=0.1,  # Changed temperature to 0.1
             )
