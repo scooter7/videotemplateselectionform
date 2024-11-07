@@ -171,8 +171,12 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
             # Log the raw response for debugging
             st.write(f"API response for current row: {response}")
 
-            # Extract the content from the response object
-            content = response.content
+            # Ensure content is a single string by joining if it's a list
+            if isinstance(response.content, list):
+                content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
+            else:
+                content = response.content
+
             if not content:
                 st.error("Content generation failed. No content returned.")
                 continue
