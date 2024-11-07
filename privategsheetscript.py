@@ -100,12 +100,12 @@ def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
         "[" 
-        u"\U0001F600-\U0001F64F"  # Emoticons
-        u"\U0001F300-\U0001F5FF"  # Symbols & Pictographs
-        u"\U0001F680-\U0001F6FF"  # Transport & Map Symbols
-        u"\U0001F1E0-\U0001F1FF"  # Flags
-        u"\u2600-\u26FF"          # Miscellaneous Symbols
-        u"\u2700-\u27BF"          # Dingbats
+        u"\U0001F600-\U0001F64F"  
+        u"\U0001F300-\U0001F5FF"  
+        u"\U0001F680-\U0001F6FF"  
+        u"\U0001F1E0-\U0001F1FF"  
+        u"\u2600-\u26FF"          
+        u"\u2700-\u27BF"          
         "]+", flags=re.UNICODE
     )
     return emoji_pattern.sub(r'', text)
@@ -134,12 +134,9 @@ def extract_template_structure(selected_template, examples_data):
     return template_structure
 
 def ensure_all_sections_populated(generated_content, template_structure):
-    """
-    Ensure that all required sections based on the template are populated, even if they are empty.
-    """
     for section_name, _, _ in template_structure:
         if section_name not in generated_content:
-            generated_content[section_name] = ""  # Ensure all sections are populated, even if empty
+            generated_content[section_name] = ""  
     return generated_content
 
 def build_template_prompt(topic_description, template_structure):
@@ -168,17 +165,15 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 ]
             )
 
-            # Log the raw response for debugging
             st.write(f"API response for current row: {response}")
 
-            # Ensure content is a single string by joining if it's a list
             if isinstance(response.content, list):
                 content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
             else:
                 content = response.content
 
             if not content:
-                st.error("Content generation failed. No content returned.")
+                st.error("Content generation failed. The response format may be unexpected.")
                 continue
 
             content_clean = clean_text(content)
@@ -200,7 +195,6 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 elif current_section:
                     sections[current_section] += ' ' + line.strip()
 
-            # Trim content to character limits without cutting off mid-word
             for section in sections:
                 limit = section_character_limits.get(section, None)
                 if limit:
@@ -224,9 +218,6 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 return None
 
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    """
-    Generate content for social media channels with retry logic in case of API overload.
-    """
     generated_content = {}
     for channel in selected_channels:
         for i in range(retries):
@@ -240,7 +231,6 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     ]
                 )
 
-                # Ensure content is a single string by joining if it's a list
                 if isinstance(response.content, list):
                     content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
                 else:
@@ -251,8 +241,7 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
                     generated_content[channel] = ""
                 else:
                     generated_content[channel] = content.strip()
-
-                break  # Exit retry loop if content generation is successful
+                break
 
             except Exception as e:
                 if 'overloaded' in str(e).lower() and i < retries - 1:
@@ -299,22 +288,10 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
     return subsections_content
 
 def get_column_name(df, name):
-    """
-    Finds a column name in the dataframe that either matches exactly
-    or starts with the specified name (useful for columns like 'Job ID').
-    """
     cols = [col for col in df.columns if col == name or col.startswith(name + '_')]
-    if cols:
-        return cols[0]
-    else:
-        return None
+    return cols[0] if cols else None
 
 def update_google_sheet(sheet_id, job_id, generated_content, source_row):
-    """
-    Updates the Google Sheet with the generated content.
-    If the Job ID is not found, it creates a new row and populates it.
-    Ensures that Job ID is placed in the correct row based on the source_row.
-    """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -328,7 +305,7 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
+        cell = sheet.find(job_id, in_column=2)  
 
         if not cell:
             st.warning(f"Job ID {job_id} not found. Placing it in the correct row based on source.")
