@@ -160,14 +160,14 @@ def build_template_prompt(topic_description, template_structure):
 def generate_content_with_retry(prompt, section_character_limits, retries=3, delay=5):
     for i in range(retries):
         try:
-            response = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
+            response = client.completions.create(
+                prompt=prompt,
                 model="claude-3-5-sonnet-20240620",
                 max_tokens_to_sample=2000,
                 temperature=0.1,  # Set temperature to 0.1 for controlled output
             )
 
-            content = response.choices[0].message['content'] if response.choices else "No content generated."
+            content = response.get('completion', "No content generated.")
 
             content_clean = clean_text(content)
 
