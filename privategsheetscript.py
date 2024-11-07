@@ -7,17 +7,23 @@ import gspread
 import time
 from collections import defaultdict
 
-# Set up the Anthropic API client
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Anthropic(api_key=anthropic_api_key)
 
-# Custom styling for the app
 st.markdown(
     """
     <style>
     .st-emotion-cache-12fmjuu.ezrtsby2 {
         display: none;
     }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <style>
     .logo-container {
         display: flex;
         justify-content: center;
@@ -93,11 +99,11 @@ def load_examples():
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
     emoji_pattern = re.compile(
-        "["
+        "[" 
         u"\U0001F600-\U0001F64F"  # Emoticons
         u"\U0001F300-\U0001F5FF"  # Symbols & Pictographs
         u"\U0001F680-\U0001F6FF"  # Transport & Map Symbols
-        u"\U0001F1E0-\U0001F1FF"  # Flags (iOS)
+        u"\U0001F1E0-\U0001F1FF"  # Flags
         u"\u2600-\u26FF"          # Miscellaneous Symbols
         u"\u2700-\u27BF"          # Dingbats
         "]+", flags=re.UNICODE
@@ -162,10 +168,13 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 ]
             )
 
-            # Extract the content from the response
-            content = response['completion'] if 'completion' in response else "No content generated."
-            if content == "No content generated.":
-                st.error("Content generation failed. Check the input data and try again.")
+            # Log the raw response for debugging
+            st.write(f"API response for current row: {response}")
+
+            # Extract the content from the response object
+            content = response.content
+            if not content:
+                st.error("Content generation failed. No content returned.")
                 continue
 
             content_clean = clean_text(content)
@@ -209,6 +218,42 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
             else:
                 st.error(f"Error generating content: {e}")
                 return None
+
+def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
+    """
+    Generate content for social media channels with retry logic in case of API overload.
+    """
+    generated_content = {}
+    for channel in selected_channels:
+        for i in range(retries):
+            try:
+                prompt = f"Generate a {channel.capitalize()} post based on this content:\n{main_content}\n"
+                response = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=500,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+
+                # Extract the content from the response
+                content = response.content
+                if not content:
+                    st.error(f"No content generated for {channel}.")
+                    generated_content[channel] = ""
+                    break
+
+                generated_content[channel] = content.strip()
+                break
+
+            except Exception as e:
+                if 'overloaded' in str(e).lower() and i < retries - 1:
+                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
+                    time.sleep(delay)
+                else:
+                    st.error(f"Error generating {channel} content: {e}")
+                    generated_content[channel] = ""
+    return generated_content
 
 def divide_content_verbatim(main_content, subsections, section_character_limits):
     words = main_content.split()
@@ -275,7 +320,7 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
 
-        cell = sheet.find(job_id, in_column=2)
+        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
 
         if not cell:
             st.warning(f"Job ID {job_id} not found. Placing it in the correct row based on source.")
@@ -307,40 +352,6 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row):
 
     except Exception as e:
         st.error(f"Error updating Google Sheet: {e}")
-
-def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
-    """
-    Generate content for social media channels with retry logic in case of API overload.
-    """
-    generated_content = {}
-    for channel in selected_channels:
-        for i in range(retries):
-            try:
-                prompt = f"Generate a {channel.capitalize()} post based on this content:\n{main_content}\n"
-                response = client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=500,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-
-                if response.content and response.content[0].type == 'text':
-                    content = response.content[0].text
-                    generated_content[channel] = content.strip()
-                else:
-                    st.error(f"No content generated for {channel}.")
-                    generated_content[channel] = ""
-                break
-
-            except Exception as e:
-                if 'overloaded' in str(e).lower() and i < retries - 1:
-                    st.warning(f"API is overloaded for {channel}, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
-                    time.sleep(delay)
-                else:
-                    st.error(f"Error generating {channel} content: {e}")
-                    generated_content[channel] = ""
-    return generated_content
 
 def main():
     st.title("AI Script Generator from Google Sheets and Templates")
@@ -390,6 +401,7 @@ def main():
                 continue
 
             section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
+
             prompt = build_template_prompt(topic_description, template_structure)
             if not prompt:
                 st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
@@ -426,6 +438,7 @@ def main():
                     generated_content[section_name] = social_media_contents.get(channel, "")
 
                 generated_contents.append((job_id, generated_content))
+
                 update_google_sheet('1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8', job_id, generated_content, idx + 1)
             else:
                 st.error(f"No content generated for row {idx + 1}, Job ID = {job_id}")
