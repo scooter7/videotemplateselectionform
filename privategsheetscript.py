@@ -407,8 +407,7 @@ def main():
                 st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
                 continue
 
-            st.write(f"Generated prompt for row {idx + 1}:
-{prompt}")
+            st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
 
             generated_content = generate_content_with_retry(prompt, section_character_limits)
             if generated_content:
