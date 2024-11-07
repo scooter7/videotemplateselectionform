@@ -205,7 +205,7 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
 
             return sections
 
-        except anthropic.ApiException as e:
+        except Exception as e:
             if 'overloaded' in str(e).lower() and i < retries - 1:
                 st.warning(f"API is overloaded, retrying in {delay} seconds... (Attempt {i + 1} of {retries})")
                 time.sleep(delay)
