@@ -171,9 +171,11 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
             # Log the raw response for debugging
             st.write(f"API response for current row: {response}")
 
-            content = response.get('completion', "No content generated.")
+            # Access the completion content
+            content = response['completion'] if 'completion' in response else "No content generated."
             if content == "No content generated.":
                 st.error("Content generation failed. Check the input data and try again.")
+                continue
 
             content_clean = clean_text(content)
 
