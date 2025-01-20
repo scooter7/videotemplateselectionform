@@ -55,6 +55,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+@st.cache_data
+def load_examples():
+    url = "https://raw.githubusercontent.com/scooter7/videotemplateselectionform/main/Examples/examples.csv"
+    try:
+        examples = pd.read_csv(url)
+        return examples
+    except Exception as e:
+        st.error(f"Error loading examples CSV: {e}")
+        return pd.DataFrame()
+
 def load_google_sheet(sheet_id):
     """
     Loads data from a Google Sheet, automatically handling duplicate column names.
