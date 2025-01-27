@@ -573,6 +573,9 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row, submitt
             else:
                 st.warning(f"Section {section} not found in the hard-coded column mapping.")
 
+        # Mark the row as complete in Column CC
+        sheet.update_cell(target_row, 81, "complete")  # Column CC corresponds to index 81
+
         st.success(f"Updated Google Sheet for Job ID {job_id} in row {target_row}")
 
     except Exception as e:
