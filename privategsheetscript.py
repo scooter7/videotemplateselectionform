@@ -572,103 +572,111 @@ def main():
         st.session_state['generated_contents'] = []
 
     if st.button("Generate Content"):
-        generated_contents = []
-        job_id_col = get_column_name(sheet_data, 'Job ID')
-        selected_template_col = get_column_name(sheet_data, 'Selected-Template')
-        topic_description_col = get_column_name(sheet_data, 'Topic-Description')
-        submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
+    generated_contents = []
+    job_id_col = get_column_name(sheet_data, 'Job ID')
+    selected_template_col = get_column_name(sheet_data, 'Selected-Template')
+    topic_description_col = get_column_name(sheet_data, 'Topic-Description')
+    submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
 
-        if not all([job_id_col, selected_template_col, topic_description_col, submittee_name_col]):
-            st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description', 'Submittee-Name') not found.")
-            return
+    if not all([job_id_col, selected_template_col, topic_description_col, submittee_name_col]):
+        st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description', 'Submittee-Name') not found.")
+        return
 
-        for idx, row in sheet_data.iterrows():
-            job_id = row[job_id_col]
+    for idx, row in sheet_data.iterrows():
+        # Convert input job ID to a trimmed string.
+        job_id_str = str(row[job_id_col]).strip()
+        skip_this = False
 
-            # NEW: Check the output sheet to see if this row is already marked complete.
-            if output_sheet_data is not None and output_job_id_col and status_col:
-                existing_rows = output_sheet_data[output_sheet_data[output_job_id_col] == job_id]
-                if not existing_rows.empty:
-                    # Check if the status cell (column CC) is "complete"
-                    if existing_rows.iloc[0][status_col].strip().lower() == "complete":
-                        st.info(f"Row {idx + 1} with Job ID {job_id} is already complete. Skipping generation.")
-                        continue
+        # NEW: Check the output sheet to see if this row is already marked complete.
+        if output_sheet_data is not None and output_job_id_col and status_col:
+            # Ensure the Job ID column in the output sheet is strings and trimmed.
+            output_sheet_data[output_job_id_col] = output_sheet_data[output_job_id_col].astype(str).str.strip()
+            existing_rows = output_sheet_data[output_sheet_data[output_job_id_col] == job_id_str]
+            if not existing_rows.empty:
+                for _, out_row in existing_rows.iterrows():
+                    status_val = str(out_row[status_col]).strip().lower()
+                    if status_val == "complete":
+                        st.info(f"Row {idx + 1} with Job ID {job_id_str} is already complete. Skipping generation.")
+                        skip_this = True
+                        break
+        if skip_this:
+            continue
 
-            selected_template = row[selected_template_col]
-            topic_description = row[topic_description_col]
-            submittee_name = row[submittee_name_col]
+        selected_template = row[selected_template_col]
+        topic_description = row[topic_description_col]
+        submittee_name = row[submittee_name_col]
 
-            st.write(f"Processing row {idx + 1}: Job ID = {job_id}, Selected Template = {selected_template}, Topic Description = {topic_description}")
+        st.write(f"Processing row {idx + 1}: Job ID = {job_id_str}, Selected Template = {selected_template}, Topic Description = {topic_description}")
 
-            if not (job_id and selected_template and topic_description and submittee_name):
-                st.warning(f"Row {idx + 1} is missing required data. Skipping.")
-                continue
+        if not (job_id_str and selected_template and topic_description and submittee_name):
+            st.warning(f"Row {idx + 1} is missing required data. Skipping.")
+            continue
 
-            template_structure = extract_template_structure(selected_template, examples_data)
-            if template_structure is None:
-                st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
-                continue
+        template_structure = extract_template_structure(selected_template, examples_data)
+        if template_structure is None:
+            st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
+            continue
 
-            section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
+        section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
 
-            prompt = build_template_prompt(topic_description, template_structure)
-            if not prompt:
-                st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
-                continue
+        prompt = build_template_prompt(topic_description, template_structure)
+        if not prompt:
+            st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
+            continue
 
-            st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
+        st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
 
-            generated_content = generate_content_with_retry(prompt, section_character_limits)
-            if generated_content:
-                st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id}")
+        generated_content = generate_content_with_retry(prompt, section_character_limits)
+        if generated_content:
+            st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id_str}")
 
-                generated_content = ensure_all_sections_populated(generated_content, template_structure)
+            generated_content = ensure_all_sections_populated(generated_content, template_structure)
 
-                full_content = generated_content.copy()
-                for main_section in full_content:
-                    subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
-                    if subsections:
-                        main_content = generated_content[main_section]
-                        subsection_character_limits = {s: section_character_limits[s] for s in subsections}
-                        divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
-                        generated_content.update(divided_contents)
+            full_content = generated_content.copy()
+            for main_section in full_content:
+                subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
+                if subsections:
+                    main_content = generated_content[main_section]
+                    subsection_character_limits = {s: section_character_limits[s] for s in subsections}
+                    divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
+                    generated_content.update(divided_contents)
 
-                social_channels = ['LinkedIn', 'Facebook', 'Instagram']
-                combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
-                social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
+            social_channels = ['LinkedIn', 'Facebook', 'Instagram']
+            combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
+            social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
 
-                social_media_section_names = {
-                    'LinkedIn': 'LinkedIn-Post-Content-Reco',
-                    'Facebook': 'Facebook-Post-Content-Reco',
-                    'Instagram': 'Instagram-Post-Content-Reco'
-                }
-                for channel in social_channels:
-                    section_name = social_media_section_names[channel]
-                    generated_content[section_name] = social_media_contents.get(channel, "")
+            social_media_section_names = {
+                'LinkedIn': 'LinkedIn-Post-Content-Reco',
+                'Facebook': 'Facebook-Post-Content-Reco',
+                'Instagram': 'Instagram-Post-Content-Reco'
+            }
+            for channel in social_channels:
+                section_name = social_media_section_names[channel]
+                generated_content[section_name] = social_media_contents.get(channel, "")
 
-                generated_contents.append((job_id, generated_content))
+            generated_contents.append((job_id_str, generated_content))
 
-                update_google_sheet(
-                    output_sheet_id,
-                    job_id,
-                    generated_content,
-                    idx + 1,
-                    submittee_name,
-                    selected_template
-                )
-            else:
-                st.error(f"No content generated for row {idx + 1}, Job ID = {job_id}")
+            update_google_sheet(
+                output_sheet_id,
+                job_id_str,
+                generated_content,
+                idx + 1,
+                submittee_name,
+                selected_template
+            )
+        else:
+            st.error(f"No content generated for row {idx + 1}, Job ID = {job_id_str}")
 
-        st.session_state['generated_contents'] = generated_contents
+    st.session_state['generated_contents'] = generated_contents
 
-        # Display generated content
-        for job_id, content in generated_contents:
-            st.subheader(f"Generated Content for Job ID: {job_id}")
-            for section, text in content.items():
-                st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
-            st.markdown("---")
+    # Display generated content
+    for job_id, content in generated_contents:
+        st.subheader(f"Generated Content for Job ID: {job_id}")
+        for section, text in content.items():
+            st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
+        st.markdown("---")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
