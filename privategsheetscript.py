@@ -676,4 +676,3 @@ if st.button("Generate Content"):
         for section, text in content.items():
             st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
         st.markdown("---")
-
