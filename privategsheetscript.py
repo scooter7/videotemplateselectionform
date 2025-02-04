@@ -8,6 +8,7 @@ import time
 from collections import defaultdict
 import logging
 
+# Initialize the AI client using your API key.
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Anthropic(api_key=anthropic_api_key)
 
@@ -69,32 +70,24 @@ def load_examples():
 def load_google_sheet(sheet_id):
     """
     Loads data from a Google Sheet, automatically handling duplicate column names.
-
-    Args:
-        sheet_id (str): The ID of the Google Sheet to load.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the sheet's data.
     """
     credentials_info = st.secrets["google_credentials"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    credentials = Credentials.from_service_account_info(
-        credentials_info, scopes=scopes
-    )
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     gc = gspread.authorize(credentials)
     
     try:
-        # Access the first sheet of the specified Google Sheet
+        # Access the first sheet of the specified Google Sheet.
         sheet = gc.open_by_key(sheet_id).sheet1
         data = sheet.get_all_values()
         if not data:
             st.warning(f"Google Sheet with ID '{sheet_id}' is empty.")
             return pd.DataFrame()
 
-        # Process headers and ensure no duplicates
+        # Process headers and ensure no duplicates.
         headers = data[0]
         header_counts = defaultdict(int)
         new_headers = []
@@ -104,7 +97,7 @@ def load_google_sheet(sheet_id):
             new_headers.append(new_h)
             header_counts[h] += 1
 
-        # Create DataFrame from the rows
+        # Create DataFrame from the rows.
         rows = data[1:]
         df = pd.DataFrame(rows, columns=new_headers)
         return df
@@ -139,16 +132,8 @@ def clean_text(text):
 def extract_template_structure(selected_template, examples_data):
     """
     Extracts the structure of the specified template from the examples_data DataFrame.
-
-    Args:
-        selected_template (str): The template name to extract.
-        examples_data (pd.DataFrame): DataFrame containing all templates and their sections.
-
-    Returns:
-        list: A list of tuples where each tuple contains:
-              (section_name, text_content, max_characters).
     """
-    # Filter examples_data to get the row for the selected_template
+    # Filter examples_data to get the row for the selected_template.
     example_row = examples_data[examples_data['Template'] == selected_template]
     if example_row.empty:
         return None
@@ -158,18 +143,17 @@ def extract_template_structure(selected_template, examples_data):
         if col != 'Template' and pd.notna(example_row[col].values[0]):
             text_element = example_row[col].values[0]
             max_chars = len(str(text_element))
-            
-            # Ensure new social media sections are included explicitly
+            # Ensure new social media sections are included explicitly.
             if col in ["LinkedIn", "Facebook", "Instagram"]:
-                template_structure.append((col, text_element, 500))  # Default max chars
+                template_structure.append((col, text_element, 500))  # Default max chars.
             else:
                 template_structure.append((col, text_element, max_chars))
     
-    # Include default sections for additional requirements
+    # Include default sections for additional requirements.
     additional_sections = [
         ("SubmitteeName", "", 50),
         ("SelectedTemplate", selected_template, len(selected_template)),
-        ("Timestamp", "", 20)  # Timestamp length estimate
+        ("Timestamp", "", 20)
     ]
     template_structure.extend(additional_sections)
     
@@ -178,44 +162,26 @@ def extract_template_structure(selected_template, examples_data):
 def ensure_all_sections_populated(generated_content, template_structure):
     """
     Ensures all sections in the template structure are present in the generated content.
-
-    Args:
-        generated_content (dict): Dictionary containing generated content with section names as keys.
-        template_structure (list): List of tuples (section_name, text_content, max_characters).
-
-    Returns:
-        dict: Updated generated content with all sections populated.
     """
     for section_name, text_content, _ in template_structure:
         if section_name not in generated_content:
-            # Provide default values for specific fields
             if section_name == "SubmitteeName":
-                generated_content[section_name] = "Unknown Submittee"  # Default or placeholder
+                generated_content[section_name] = "Unknown Submittee"
             elif section_name == "SelectedTemplate":
-                generated_content[section_name] = text_content  # Use template name
+                generated_content[section_name] = text_content
             elif section_name == "Timestamp":
-                # Populate with the current timestamp in mm/dd/yyyy HH:MM:SS format
                 generated_content[section_name] = time.strftime("%m/%d/%Y %H:%M:%S")
             else:
-                # Default to an empty string for other sections
                 generated_content[section_name] = ""
     return generated_content
 
 def build_template_prompt(topic_description, template_structure):
     """
     Builds a prompt for content generation based on a topic description and template structure.
-
-    Args:
-        topic_description (str): The description of the topic for generating content.
-        template_structure (list): List of tuples (section_name, text_content, max_characters).
-
-    Returns:
-        str: A formatted prompt for generating content, or None if inputs are invalid.
     """
     if not (topic_description and template_structure):
         return None
 
-    # Initialize the prompt with instructions
     prompt = (
         f"Using the following description, generate content for each main section as specified. "
         f"Each main section should start with 'Section [Section Name]:' followed by the content. "
@@ -223,22 +189,13 @@ def build_template_prompt(topic_description, template_structure):
     )
     prompt += f"Description:\n{topic_description}\n\n"
 
-    # Include each section from the template structure
     for section_name, _, max_chars in template_structure:
         if section_name == "SubmitteeName":
-            prompt += (
-                f"Section {section_name}: (Provide the name of the submittee. No character limit.)\n"
-            )
+            prompt += f"Section {section_name}: (Provide the name of the submittee. No character limit.)\n"
         elif section_name == "SelectedTemplate":
-            prompt += (
-                f"Section {section_name}: (Provide the name of the selected template. "
-                f"No character limit.)\n"
-            )
+            prompt += f"Section {section_name}: (Provide the name of the selected template. No character limit.)\n"
         elif section_name == "Timestamp":
-            prompt += (
-                f"Section {section_name}: (Include the timestamp in the format mm/dd/yyyy 00:00:00. "
-                f"No character limit.)\n"
-            )
+            prompt += f"Section {section_name}: (Include the timestamp in the format mm/dd/yyyy 00:00:00. No character limit.)\n"
         else:
             prompt += f"Section {section_name}: (max {max_chars} characters)\n"
 
@@ -247,43 +204,27 @@ def build_template_prompt(topic_description, template_structure):
 def generate_content_with_retry(prompt, section_character_limits, retries=3, delay=5):
     """
     Generates content with retries in case of errors and applies character limits to sections.
-
-    Args:
-        prompt (str): The input prompt for the AI model.
-        section_character_limits (dict): A dictionary of section names and their character limits.
-        retries (int): Number of retries in case of errors. Default is 3.
-        delay (int): Delay (in seconds) between retries. Default is 5.
-
-    Returns:
-        dict: A dictionary of generated content sections.
     """
     for i in range(retries):
         try:
-            # Send the prompt to the AI model
             response = client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=2000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                messages=[{"role": "user", "content": prompt}]
             )
 
-            # Parse the response content
             if isinstance(response.content, list):
                 content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
             else:
                 content = response.content
 
-            # Retry if no content is returned
             if not content:
                 continue
 
-            # Clean the content
             content_clean = clean_text(content)
             sections = {}
             current_section = None
 
-            # Extract sections from the content
             for line in content_clean.split('\n'):
                 line = line.strip()
                 if line.startswith("Section "):
@@ -299,23 +240,20 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
                 elif current_section:
                     sections[current_section] += ' ' + line.strip()
 
-            # Apply character limits to sections
             for section in sections:
                 limit = section_character_limits.get(section, None)
                 if limit and len(sections[section]) > limit:
                     trimmed_content = sections[section][:limit].rsplit(' ', 1)[0] or sections[section][:limit]
                     sections[section] = trimmed_content.strip()
 
-            # Add missing required fields with defaults
             required_fields = ["SubmitteeName", "SelectedTemplate", "Timestamp"]
             for field in required_fields:
                 if field not in sections:
                     if field == "Timestamp":
-                        sections[field] = time.strftime("%m/%d/%Y %H:%M:%S")  # Current timestamp
+                        sections[field] = time.strftime("%m/%d/%Y %H:%M:%S")
                     else:
-                        sections[field] = ""  # Placeholder for missing fields
-
-            # Ensure all sections are populated
+                        sections[field] = ""
+            
             for section in section_character_limits:
                 if section not in sections:
                     sections[section] = ""
@@ -323,7 +261,6 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
             return sections
 
         except Exception as e:
-            # Retry if error indicates the system is overloaded
             if 'overloaded' in str(e).lower() and i < retries - 1:
                 time.sleep(delay)
             else:
@@ -333,49 +270,30 @@ def generate_content_with_retry(prompt, section_character_limits, retries=3, del
 def generate_social_content_with_retry(main_content, selected_channels, retries=3, delay=5):
     """
     Generates social media content for specified channels with retry logic.
-
-    Args:
-        main_content (str): The main content to use as the basis for social media posts.
-        selected_channels (list): A list of social media channels to generate content for.
-        retries (int): Number of retries in case of errors. Default is 3.
-        delay (int): Delay (in seconds) between retries. Default is 5.
-
-    Returns:
-        dict: A dictionary containing generated content for each channel.
     """
     generated_content = {}
     for channel in selected_channels:
         for attempt in range(retries):
             try:
-                # Generate a prompt specific to the channel
                 prompt = f"Generate a {channel.capitalize()} post based on this content:\n{main_content}\n"
-                
-                # Call the AI model
                 response = client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=500,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
+                    messages=[{"role": "user", "content": prompt}]
                 )
 
-                # Extract and clean the response content
                 if isinstance(response.content, list):
                     content = ''.join([block.text for block in response.content if hasattr(block, 'text')])
                 else:
                     content = response.content
 
-                # If content is successfully generated, add to the dictionary
                 if content:
                     generated_content[channel] = content.strip()
                 else:
                     generated_content[channel] = ""
-                
-                # Break the retry loop on success
                 break
 
             except Exception as e:
-                # Log error and retry if possible
                 st.error(f"Error generating content for {channel} (attempt {attempt + 1}): {e}")
                 if 'overloaded' in str(e).lower() and attempt < retries - 1:
                     time.sleep(delay)
@@ -386,14 +304,6 @@ def generate_social_content_with_retry(main_content, selected_channels, retries=
 def divide_content_verbatim(main_content, subsections, section_character_limits):
     """
     Divides the main content into subsections based on character limits.
-
-    Args:
-        main_content (str): The content to divide.
-        subsections (list): A list of subsection names.
-        section_character_limits (dict): Character limits for each subsection.
-
-    Returns:
-        dict: A dictionary with subsections as keys and their respective content as values.
     """
     words = main_content.split()
     total_words = len(words)
@@ -402,8 +312,6 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
 
     for subsection in subsections:
         limit = section_character_limits.get(subsection, None)
-
-        # If no limit is provided, skip this subsection
         if limit is None:
             subsections_content[subsection] = ""
             continue
@@ -411,17 +319,12 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
         current_content = ''
         while start_idx < total_words:
             word = words[start_idx]
-
-            # Include single words exceeding the limit
             if len(word) > limit:
                 if not current_content:
                     current_content = word
                 break
-
-            # Check if adding the next word exceeds the limit
             if len(current_content) + len(word) + (1 if current_content else 0) > limit:
                 break
-
             if current_content:
                 current_content += ' '
             current_content += word
@@ -433,26 +336,16 @@ def divide_content_verbatim(main_content, subsections, section_character_limits)
 
         subsections_content[subsection] = current_content.strip()
 
-    # Append remaining content to the last subsection
     if start_idx < total_words and subsections:
         last_subsection = subsections[-1]
         remaining_content = ' '.join(words[start_idx:])
-        subsections_content[last_subsection] = (
-            subsections_content.get(last_subsection, "") + ' ' + remaining_content
-        ).strip()
+        subsections_content[last_subsection] = (subsections_content.get(last_subsection, "") + ' ' + remaining_content).strip()
 
     return subsections_content
 
 def get_column_name(df, name):
     """
     Finds a column in the DataFrame that matches the name or starts with the name followed by an underscore.
-
-    Args:
-        df (pd.DataFrame): The DataFrame to search.
-        name (str): The column name to find.
-
-    Returns:
-        str: The matching column name or None if not found.
     """
     cols = [col for col in df.columns if col.lower() == name.lower() or col.lower().startswith(name.lower() + '_')]
     if not cols:
@@ -465,35 +358,24 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row, submitt
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    credentials = Credentials.from_service_account_info(
-        credentials_info, scopes=scopes
-    )
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     gc = gspread.authorize(credentials)
 
     try:
         sheet = gc.open_by_key(sheet_id).sheet1
-
-        # Locate Job ID in Column B
-        cell = sheet.find(job_id, in_column=2)  # Assuming Job ID is in column B (index 2)
-
-        # Determine the target row
+        # Locate Job ID in Column B.
+        cell = sheet.find(job_id, in_column=2)
         if not cell:
             target_row = source_row + 1
-            sheet.update_cell(target_row, 2, job_id)  # Update Job ID in Column B
+            sheet.update_cell(target_row, 2, job_id)
         else:
             target_row = cell.row
 
-        # Add Submittee Name to Column D
         sheet.update_cell(target_row, 4, submittee_name)
-
-        # Add Selected Template to Column A
         sheet.update_cell(target_row, 1, selected_template)
-
-        # Add Timestamp to Column C
         timestamp = time.strftime("%m/%d/%Y %H:%M:%S")
         sheet.update_cell(target_row, 3, timestamp)
 
-        # Mapping of content sections to columns
         column_mapping = {
             'Text01': 'I', 'Text01-1': 'J', 'Text01-2': 'K', 'Text01-3': 'L', 'Text01-4': 'M',
             '01BG-Theme-Text': 'N',
@@ -521,18 +403,16 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row, submitt
             'Instagram-Post-Content-Reco': 'BX'
         }
 
-        # Update content in the sheet
         for section, content in generated_content.items():
             if section in column_mapping:
                 col = column_mapping[section]
-                col_index = gspread.utils.a1_to_rowcol(col + str(1))[1]  # Convert A1 notation to column index
+                col_index = gspread.utils.a1_to_rowcol(col + str(1))[1]
                 sheet.update_cell(target_row, col_index, content)
             else:
                 st.warning(f"Section {section} not found in the hard-coded column mapping.")
 
-        # Mark the row as complete in Column CC (which is column 81)
+        # Mark the row as complete in Column CC (column 81).
         sheet.update_cell(target_row, 81, "complete")
-
         st.success(f"Updated Google Sheet for Job ID {job_id} in row {target_row}")
 
     except Exception as e:
@@ -542,7 +422,7 @@ def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    # Load input data from Google Sheets and examples CSV
+    # Load input data from Google Sheets and examples CSV.
     if 'sheet_data' not in st.session_state:
         st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     if 'examples_data' not in st.session_state:
@@ -555,124 +435,122 @@ def main():
         st.error("No data available from Google Sheets or Templates CSV.")
         return
 
-    # Display input sheet data
+    # Display input sheet data.
     st.dataframe(sheet_data)
 
     # ---------------------------
-    # NEW: Load the output sheet data and determine the status column.
+    # Load the output sheet data and determine the status column.
     output_sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
     output_sheet_data = load_google_sheet(output_sheet_id)
-    # Attempt to locate the 'Job ID' column in the output sheet
     output_job_id_col = get_column_name(output_sheet_data, 'Job ID') if not output_sheet_data.empty else None
-    # Assume column CC (the 81st column) is our status column (if available)
     status_col = output_sheet_data.columns[80] if len(output_sheet_data.columns) > 80 else None
     # ---------------------------
 
-if 'generated_contents' not in st.session_state:
-    st.session_state['generated_contents'] = []
+    if 'generated_contents' not in st.session_state:
+        st.session_state['generated_contents'] = []
 
-if st.button("Generate Content"):
-    generated_contents = []
-    job_id_col = get_column_name(sheet_data, 'Job ID')
-    selected_template_col = get_column_name(sheet_data, 'Selected-Template')
-    topic_description_col = get_column_name(sheet_data, 'Topic-Description')
-    submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
+    if st.button("Generate Content"):
+        generated_contents = []
+        job_id_col = get_column_name(sheet_data, 'Job ID')
+        selected_template_col = get_column_name(sheet_data, 'Selected-Template')
+        topic_description_col = get_column_name(sheet_data, 'Topic-Description')
+        submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
 
-    # Check that all required columns are found.
-    if not all([job_id_col, selected_template_col, topic_description_col, submittee_name_col]):
-        st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description', 'Submittee-Name') not found.")
-        return
+        # Check that all required columns are found.
+        if not all([job_id_col, selected_template_col, topic_description_col, submittee_name_col]):
+            st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description', 'Submittee-Name') not found.")
+            return
 
-    for idx, row in sheet_data.iterrows():
-        # Convert input job ID to a trimmed string.
-        job_id_str = str(row[job_id_col]).strip()
-        skip_this = False
+        for idx, row in sheet_data.iterrows():
+            # Convert input job ID to a trimmed string.
+            job_id_str = str(row[job_id_col]).strip()
+            skip_this = False
 
-        # Check the output sheet to see if this row is already marked complete.
-        if output_sheet_data is not None and output_job_id_col and status_col:
-            # Ensure the Job ID column in the output sheet is strings and trimmed.
-            output_sheet_data[output_job_id_col] = output_sheet_data[output_job_id_col].astype(str).str.strip()
-            existing_rows = output_sheet_data[output_sheet_data[output_job_id_col] == job_id_str]
-            if not existing_rows.empty:
-                for _, out_row in existing_rows.iterrows():
-                    status_val = str(out_row[status_col]).strip().lower()
-                    if status_val == "complete":
-                        st.info(f"Row {idx + 1} with Job ID {job_id_str} is already complete. Skipping generation.")
-                        skip_this = True
-                        break
-        if skip_this:
-            continue
+            # Check the output sheet to see if this row is already marked complete.
+            if output_sheet_data is not None and output_job_id_col and status_col:
+                output_sheet_data[output_job_id_col] = output_sheet_data[output_job_id_col].astype(str).str.strip()
+                existing_rows = output_sheet_data[output_sheet_data[output_job_id_col] == job_id_str]
+                if not existing_rows.empty:
+                    for _, out_row in existing_rows.iterrows():
+                        status_val = str(out_row[status_col]).strip().lower()
+                        if status_val == "complete":
+                            st.info(f"Row {idx + 1} with Job ID {job_id_str} is already complete. Skipping generation.")
+                            skip_this = True
+                            break
+            if skip_this:
+                continue
 
-        selected_template = row[selected_template_col]
-        topic_description = row[topic_description_col]
-        submittee_name = row[submittee_name_col]
+            selected_template = row[selected_template_col]
+            topic_description = row[topic_description_col]
+            submittee_name = row[submittee_name_col]
 
-        st.write(f"Processing row {idx + 1}: Job ID = {job_id_str}, Selected Template = {selected_template}, Topic Description = {topic_description}")
+            st.write(f"Processing row {idx + 1}: Job ID = {job_id_str}, Selected Template = {selected_template}, Topic Description = {topic_description}")
 
-        if not (job_id_str and selected_template and topic_description and submittee_name):
-            st.warning(f"Row {idx + 1} is missing required data. Skipping.")
-            continue
+            if not (job_id_str and selected_template and topic_description and submittee_name):
+                st.warning(f"Row {idx + 1} is missing required data. Skipping.")
+                continue
 
-        template_structure = extract_template_structure(selected_template, examples_data)
-        if template_structure is None:
-            st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
-            continue
+            template_structure = extract_template_structure(selected_template, examples_data)
+            if template_structure is None:
+                st.warning(f"Template {selected_template} not found in examples data. Skipping row {idx + 1}.")
+                continue
 
-        section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
+            section_character_limits = {name: max_chars for name, _, max_chars in template_structure}
+            prompt = build_template_prompt(topic_description, template_structure)
+            if not prompt:
+                st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
+                continue
 
-        prompt = build_template_prompt(topic_description, template_structure)
-        if not prompt:
-            st.warning(f"Failed to build prompt for row {idx + 1}. Skipping this row.")
-            continue
+            st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
 
-        st.write(f"Generated prompt for row {idx + 1}:\n{prompt}")
+            generated_content = generate_content_with_retry(prompt, section_character_limits)
+            if generated_content:
+                st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id_str}")
+                generated_content = ensure_all_sections_populated(generated_content, template_structure)
+                full_content = generated_content.copy()
 
-        generated_content = generate_content_with_retry(prompt, section_character_limits)
-        if generated_content:
-            st.write(f"Content generated successfully for row {idx + 1}, Job ID = {job_id_str}")
+                for main_section in full_content:
+                    subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
+                    if subsections:
+                        main_content = generated_content[main_section]
+                        subsection_character_limits = {s: section_character_limits[s] for s in subsections}
+                        divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
+                        generated_content.update(divided_contents)
 
-            generated_content = ensure_all_sections_populated(generated_content, template_structure)
+                social_channels = ['LinkedIn', 'Facebook', 'Instagram']
+                combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
+                social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
 
-            full_content = generated_content.copy()
-            for main_section in full_content:
-                subsections = [s for s, _, _ in template_structure if s.startswith(f"{main_section}-")]
-                if subsections:
-                    main_content = generated_content[main_section]
-                    subsection_character_limits = {s: section_character_limits[s] for s in subsections}
-                    divided_contents = divide_content_verbatim(main_content, subsections, subsection_character_limits)
-                    generated_content.update(divided_contents)
+                social_media_section_names = {
+                    'LinkedIn': 'LinkedIn-Post-Content-Reco',
+                    'Facebook': 'Facebook-Post-Content-Reco',
+                    'Instagram': 'Instagram-Post-Content-Reco'
+                }
+                for channel in social_channels:
+                    section_name = social_media_section_names[channel]
+                    generated_content[section_name] = social_media_contents.get(channel, "")
 
-            social_channels = ['LinkedIn', 'Facebook', 'Instagram']
-            combined_content = "\n".join([f"{section}: {content}" for section, content in generated_content.items()])
-            social_media_contents = generate_social_content_with_retry(combined_content, social_channels)
+                generated_contents.append((job_id_str, generated_content))
 
-            social_media_section_names = {
-                'LinkedIn': 'LinkedIn-Post-Content-Reco',
-                'Facebook': 'Facebook-Post-Content-Reco',
-                'Instagram': 'Instagram-Post-Content-Reco'
-            }
-            for channel in social_channels:
-                section_name = social_media_section_names[channel]
-                generated_content[section_name] = social_media_contents.get(channel, "")
+                update_google_sheet(
+                    output_sheet_id,
+                    job_id_str,
+                    generated_content,
+                    idx + 1,
+                    submittee_name,
+                    selected_template
+                )
+            else:
+                st.error(f"No content generated for row {idx + 1}, Job ID = {job_id_str}")
 
-            generated_contents.append((job_id_str, generated_content))
+        st.session_state['generated_contents'] = generated_contents
 
-            update_google_sheet(
-                output_sheet_id,
-                job_id_str,
-                generated_content,
-                idx + 1,
-                submittee_name,
-                selected_template
-            )
-        else:
-            st.error(f"No content generated for row {idx + 1}, Job ID = {job_id_str}")
+        # Display generated content.
+        for job_id, content in generated_contents:
+            st.subheader(f"Generated Content for Job ID: {job_id}")
+            for section, text in content.items():
+                st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
+            st.markdown("---")
 
-    st.session_state['generated_contents'] = generated_contents
-
-    # Display generated content
-    for job_id, content in generated_contents:
-        st.subheader(f"Generated Content for Job ID: {job_id}")
-        for section, text in content.items():
-            st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
-        st.markdown("---")
+if __name__ == "__main__":
+    main()
