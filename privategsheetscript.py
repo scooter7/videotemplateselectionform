@@ -571,13 +571,14 @@ def main():
     if 'generated_contents' not in st.session_state:
         st.session_state['generated_contents'] = []
 
-    if st.button("Generate Content"):
+  if st.button("Generate Content"):
     generated_contents = []
     job_id_col = get_column_name(sheet_data, 'Job ID')
     selected_template_col = get_column_name(sheet_data, 'Selected-Template')
     topic_description_col = get_column_name(sheet_data, 'Topic-Description')
     submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
 
+    # Check that all required columns are found.
     if not all([job_id_col, selected_template_col, topic_description_col, submittee_name_col]):
         st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description', 'Submittee-Name') not found.")
         return
@@ -587,7 +588,7 @@ def main():
         job_id_str = str(row[job_id_col]).strip()
         skip_this = False
 
-        # NEW: Check the output sheet to see if this row is already marked complete.
+        # Check the output sheet to see if this row is already marked complete.
         if output_sheet_data is not None and output_job_id_col and status_col:
             # Ensure the Job ID column in the output sheet is strings and trimmed.
             output_sheet_data[output_job_id_col] = output_sheet_data[output_job_id_col].astype(str).str.strip()
