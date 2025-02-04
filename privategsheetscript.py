@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 import gspread
 import time
 from collections import defaultdict
+import logging
 
 anthropic_api_key = st.secrets["anthropic"]["anthropic_api_key"]
 client = anthropic.Anthropic(api_key=anthropic_api_key)
@@ -117,53 +118,9 @@ def load_google_sheet(sheet_id):
         return pd.DataFrame()
 
 @st.cache_data
-def load_google_sheet(sheet_id):
-    """
-    Loads data from a Google Sheet, automatically handling duplicate column names.
-
-    Args:
-        sheet_id (str): The ID of the Google Sheet to load.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the sheet's data.
-    """
-    credentials_info = st.secrets["google_credentials"]
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    credentials = Credentials.from_service_account_info(
-        credentials_info, scopes=scopes
-    )
-    gc = gspread.authorize(credentials)
-
-    try:
-        sheet = gc.open_by_key(sheet_id).sheet1
-        data = sheet.get_all_values()
-        if not data:
-            st.warning(f"Google Sheet with ID '{sheet_id}' is empty.")
-            return pd.DataFrame()
-
-        headers = data[0]
-        header_counts = defaultdict(int)
-        new_headers = []
-        for h in headers:
-            count = header_counts[h]
-            new_h = f"{h}_{count}" if count > 0 else h
-            new_headers.append(new_h)
-            header_counts[h] += 1
-
-        rows = data[1:]
-        df = pd.DataFrame(rows, columns=new_headers)
-        return df
-
-    except gspread.SpreadsheetNotFound:
-        st.error(f"Spreadsheet with ID '{sheet_id}' not found.")
-        return pd.DataFrame()
-
-    except Exception as e:
-        st.error(f"An error occurred while loading the Google Sheet: {e}")
-        return pd.DataFrame()
+def load_google_sheet_cached(sheet_id):
+    # A cached version if you want to keep separate caches for different sheet IDs.
+    return load_google_sheet(sheet_id)
 
 def clean_text(text):
     text = re.sub(r'\*\*', '', text)
@@ -573,8 +530,8 @@ def update_google_sheet(sheet_id, job_id, generated_content, source_row, submitt
             else:
                 st.warning(f"Section {section} not found in the hard-coded column mapping.")
 
-        # Mark the row as complete in Column CC
-        sheet.update_cell(target_row, 81, "complete")  # Column CC corresponds to index 81
+        # Mark the row as complete in Column CC (which is column 81)
+        sheet.update_cell(target_row, 81, "complete")
 
         st.success(f"Updated Google Sheet for Job ID {job_id} in row {target_row}")
 
@@ -585,7 +542,7 @@ def main():
     st.title("AI Script Generator from Google Sheets and Templates")
     st.markdown("---")
 
-    # Load data from Google Sheets and examples CSV
+    # Load input data from Google Sheets and examples CSV
     if 'sheet_data' not in st.session_state:
         st.session_state['sheet_data'] = load_google_sheet('1hUX9HPZjbnyrWMc92IytOt4ofYitHRMLSjQyiBpnMK8')
     if 'examples_data' not in st.session_state:
@@ -600,6 +557,16 @@ def main():
 
     # Display input sheet data
     st.dataframe(sheet_data)
+
+    # ---------------------------
+    # NEW: Load the output sheet data and determine the status column.
+    output_sheet_id = '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8'
+    output_sheet_data = load_google_sheet(output_sheet_id)
+    # Attempt to locate the 'Job ID' column in the output sheet
+    output_job_id_col = get_column_name(output_sheet_data, 'Job ID') if not output_sheet_data.empty else None
+    # Assume column CC (the 81st column) is our status column (if available)
+    status_col = output_sheet_data.columns[80] if len(output_sheet_data.columns) > 80 else None
+    # ---------------------------
 
     if 'generated_contents' not in st.session_state:
         st.session_state['generated_contents'] = []
@@ -617,6 +584,16 @@ def main():
 
         for idx, row in sheet_data.iterrows():
             job_id = row[job_id_col]
+
+            # NEW: Check the output sheet to see if this row is already marked complete.
+            if output_sheet_data is not None and output_job_id_col and status_col:
+                existing_rows = output_sheet_data[output_sheet_data[output_job_id_col] == job_id]
+                if not existing_rows.empty:
+                    # Check if the status cell (column CC) is "complete"
+                    if existing_rows.iloc[0][status_col].strip().lower() == "complete":
+                        st.info(f"Row {idx + 1} with Job ID {job_id} is already complete. Skipping generation.")
+                        continue
+
             selected_template = row[selected_template_col]
             topic_description = row[topic_description_col]
             submittee_name = row[submittee_name_col]
@@ -672,7 +649,7 @@ def main():
                 generated_contents.append((job_id, generated_content))
 
                 update_google_sheet(
-                    '1fZs6GMloaw83LoxaX1NYIDr1xHiKtNjyJyn2mKMUvj8',
+                    output_sheet_id,
                     job_id,
                     generated_content,
                     idx + 1,
