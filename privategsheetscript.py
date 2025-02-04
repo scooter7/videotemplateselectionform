@@ -572,11 +572,11 @@ def main():
         st.session_state['generated_contents'] = []
 
     if st.button("Generate Content"):
-        generated_contents = []
-        job_id_col = get_column_name(sheet_data, 'Job ID')
-        selected_template_col = get_column_name(sheet_data, 'Selected-Template')
-        topic_description_col = get_column_name(sheet_data, 'Topic-Description')
-        submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
+    generated_contents = []
+    job_id_col = get_column_name(sheet_data, 'Job ID')
+    selected_template_col = get_column_name(sheet_data, 'Selected-Template')
+    topic_description_col = get_column_name(sheet_data, 'Topic-Description')
+    submittee_name_col = get_column_name(sheet_data, 'Submittee-Name')  # Assuming column name for submittee
 
     if not all([job_id_col, selected_template_col, topic_description_col, submittee_name_col]):
         st.error("Required columns ('Job ID', 'Selected-Template', 'Topic-Description', 'Submittee-Name') not found.")
@@ -675,8 +675,3 @@ def main():
         for section, text in content.items():
             st.text_area(f"Section {section}", text, height=100, key=f"text_area_{job_id}_{section}")
         st.markdown("---")
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
